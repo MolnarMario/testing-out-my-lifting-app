@@ -1,0 +1,7 @@
+node_modules/
+dist/
+*.local
+.DS_Store
+
+# AI Hive workspace coordination, not project code
+.aihive/
