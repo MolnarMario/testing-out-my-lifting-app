@@ -1,29 +1,63 @@
-import { Utensils } from "lucide-react";
+import { useState } from "react";
+import { TodayPane } from "./TodayPane";
+import { PantryPane } from "./PantryPane";
+import { GoalsPane } from "./GoalsPane";
+import { useFood } from "../../hooks/useFood";
+import { todayKey } from "../../lib/format";
 import type { Unit } from "../../lib/types";
 
 interface Props {
   unit: Unit;
 }
 
+type Pane = "today" | "pantry" | "goals";
+
+const PANES: { key: Pane; label: string }[] = [
+  { key: "today", label: "Today" },
+  { key: "pantry", label: "Pantry" },
+  { key: "goals", label: "Goals" },
+];
+
 export function FoodTab({ unit }: Props) {
+  const [pane, setPane] = useState<Pane>("today");
+  const [date, setDate] = useState(todayKey());
+  const { state, pantry, getDay, updateDay, setGoals, addFood, removeFood } = useFood();
+
   return (
-    <div className="card">
-      <div className="card-head">
-        <div className="card-title">
-          <Utensils aria-hidden="true" />
-          Food
-        </div>
-        <span className="card-note">Not rebuilt yet</span>
+    <div className="mc">
+      <div className="mc-tabs" role="tablist" aria-label="Food sections">
+        {PANES.map(({ key, label }) => (
+          <button
+            key={key}
+            role="tab"
+            aria-selected={pane === key}
+            className={pane === key ? "mc-tab on" : "mc-tab"}
+            onClick={() => setPane(key)}
+          >
+            {label}
+            {key === "pantry" && pantry.length > 0 && (
+              <span className="mc-badge">{pantry.length}</span>
+            )}
+          </button>
+        ))}
       </div>
 
-      <div className="empty">
-        <Utensils aria-hidden="true" />
-        <div className="t">Coming back soon</div>
-        <div className="d">
-          The macro journal — bodyweight in {unit}, calories and macros — is still on the rewrite
-          list. The original is preserved in <code>legacy/index.html</code>.
-        </div>
-      </div>
+      {pane === "today" && (
+        <TodayPane
+          date={date}
+          onDateChange={setDate}
+          day={getDay(date)}
+          pantry={pantry}
+          goals={state.goal}
+          unit={unit}
+          onUpdateDay={(patch) => updateDay(date, patch)}
+          onOpenGoals={() => setPane("goals")}
+        />
+      )}
+
+      {pane === "pantry" && <PantryPane pantry={pantry} onAdd={addFood} onRemove={removeFood} />}
+
+      {pane === "goals" && <GoalsPane goals={state.goal} onChange={setGoals} />}
     </div>
   );
 }

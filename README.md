@@ -9,7 +9,7 @@ npm install
 npm run dev      # dev server
 npm run build    # typecheck + production build into dist/
 npm run preview  # serve the built output
-npm test         # plate-loader solver tests
+npm test         # plate-solver and food-maths tests
 ```
 
 ## Status
@@ -22,9 +22,12 @@ and is still the behavioural reference for the parts not yet rebuilt.
 | --- | --- |
 | Workout | Rebuilt — date navigation, set logging with RPE/percentage intensity, edit and delete, readiness meters, session timing, notes |
 | Plates | Rebuilt — barbell visual, greedy plate solver, bar and collar options, quick pair chips, kg micro plates |
-| Food | Placeholder — macro journal not yet ported |
+| Food | Rebuilt — calorie and macro tracking against daily targets, 92-food pantry plus custom entries, water and bodyweight, g/oz and ml/fl-oz input |
 
 The plate icon on any logged set sends that weight straight to the loader.
+
+Not carried over from the original food tab: the month calendar view and the
+energy-drink counter.
 
 **The rewrite does not read data saved by the legacy build.** The storage shapes are
 different and no migration is provided, so the two are effectively separate apps.
