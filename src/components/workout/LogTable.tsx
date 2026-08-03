@@ -12,6 +12,15 @@ interface Props {
   onLoadOnBar: (weight: number) => void;
 }
 
+/** Gear worth calling out — the defaults stay silent. */
+function modifiers(set: SetEntry): string[] {
+  const out: string[] = [];
+  if (set.beltless) out.push("Beltless");
+  if (set.straps) out.push("Straps");
+  if (set.kneeGear && set.kneeGear !== "Sleeveless") out.push(set.kneeGear);
+  return out;
+}
+
 function intensityLabel(set: SetEntry): { text: string; className: string } {
   if (set.intensityType === "rpe" && set.intensityValue !== null) {
     return { text: `RPE ${set.intensityValue}`, className: "intensity-tag rpe" };
@@ -90,6 +99,15 @@ export function LogTable({
                         <span className={set.stance === "sumo" ? "stance-pill sumo" : "stance-pill"}>
                           {set.stance === "sumo" ? "Sumo" : "Conv"}
                         </span>
+                      )}
+                      {modifiers(set).length > 0 && (
+                        <div className="mods">
+                          {modifiers(set).map((m) => (
+                            <span className="mod-pill" key={m}>
+                              {m}
+                            </span>
+                          ))}
+                        </div>
                       )}
                     </div>
                   </td>

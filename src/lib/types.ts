@@ -32,6 +32,13 @@ export interface SetEntry {
   stance?: Stance;
   intensityType: IntensityType;
   intensityValue: number | null;
+  /**
+   * Gear is recorded by exception, the way lifters actually talk about it: a
+   * belted squat is the default, so it is the beltless one worth noting.
+   */
+  beltless?: boolean;
+  straps?: boolean;
+  kneeGear?: string | null;
 }
 
 export interface DayLog {
@@ -52,10 +59,14 @@ export interface Exercise {
   name: string;
   group: string;
   isCustom?: boolean;
-  /** Tracked for 1RM. */
-  isMain?: boolean;
   /** Conventional/sumo applies (deadlift variants). */
   hasStance?: boolean;
+  /** Offer the gear toggles this movement is actually done with. */
+  belt?: boolean;
+  straps?: boolean;
+  kneeGear?: boolean;
+  /** Held for time rather than counted in reps. */
+  timed?: boolean;
 }
 
 export function emptyReadiness(): Readiness {

@@ -23,6 +23,7 @@ interface Props {
   unit: Unit;
   onUpdateDay: (patch: (day: FoodDay) => FoodDay) => void;
   onOpenGoals: () => void;
+  onOpenCalendar: () => void;
 }
 
 const MACROS = [
@@ -41,6 +42,7 @@ export function TodayPane({
   unit,
   onUpdateDay,
   onOpenGoals,
+  onOpenCalendar,
 }: Props) {
   const [foodId, setFoodId] = useState("");
   const [qty, setQty] = useState("");
@@ -105,17 +107,14 @@ export function TodayPane({
         <button className="round" onClick={() => onDateChange(addDays(date, -1))} aria-label="Previous day">
           ‹
         </button>
-        <div className="mc-datefield">
+        <button
+          type="button"
+          className="mc-datefield"
+          onClick={onOpenCalendar}
+          title="Open food calendar"
+        >
           <span className="mc-datelabel">{formatDateLong(date)}</span>
-          <input
-            type="date"
-            value={date}
-            aria-label="Pick a date"
-            onChange={(e) => {
-              if (e.target.value) onDateChange(e.target.value);
-            }}
-          />
-        </div>
+        </button>
         <button className="round" onClick={() => onDateChange(addDays(date, 1))} aria-label="Next day">
           ›
         </button>

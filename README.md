@@ -20,14 +20,14 @@ and is still the behavioural reference for the parts not yet rebuilt.
 
 | Tab | State |
 | --- | --- |
-| Workout | Rebuilt — date navigation, set logging with RPE/percentage intensity, edit and delete, readiness meters, session timing, notes |
+| Workout | Rebuilt — Today (set logging with RPE/percentage intensity, per-set gear, readiness meters, session timing, notes), Calendar (month overview with day preview), Exercises (47-lift library, add and remove) |
 | Plates | Rebuilt — barbell visual, greedy plate solver, bar and collar options, quick pair chips, kg micro plates |
-| Food | Rebuilt — calorie and macro tracking against daily targets, 92-food pantry plus custom entries, water and bodyweight, g/oz and ml/fl-oz input |
+| Food | Rebuilt — calorie and macro tracking against daily targets, month calendar, 92-food pantry plus custom entries, water and bodyweight, g/oz and ml/fl-oz input |
 
 The plate icon on any logged set sends that weight straight to the loader.
 
-Not carried over from the original food tab: the month calendar view and the
-energy-drink counter.
+Still not carried over from the original: the combined training + nutrition
+calendar, body-composition rows, and the easter eggs.
 
 **The rewrite does not read data saved by the legacy build.** The storage shapes are
 different and no migration is provided, so the two are effectively separate apps.

@@ -1,7 +1,8 @@
 import { useEffect, useState } from "react";
-import { ChevronDown, Pencil, Plus } from "lucide-react";
+import { Check, ChevronDown, Pencil, Plus } from "lucide-react";
 import { NumberField } from "../NumberField";
 import { ExercisePicker } from "./ExercisePicker";
+import { KNEE_GEAR } from "../../data/exercises";
 import { fromKg, toKg, roundKg, uid, formatWeight } from "../../lib/format";
 import type { Exercise, IntensityType, SetEntry, Stance, Unit } from "../../lib/types";
 import type { Maxes } from "../../hooks/useMaxes";
@@ -20,9 +21,9 @@ const RPE_VALUES = [6, 6.5, 7, 7.5, 8, 8.5, 9, 9.5, 10];
 
 /** Which stored 1RM, if any, a given exercise is measured against. */
 function maxForExercise(exerciseId: string, maxes: Maxes): number | null {
-  if (exerciseId === "back-squat") return maxes.squat;
-  if (exerciseId === "bench-press") return maxes.bench;
-  if (exerciseId === "deadlift") return maxes.deadlift;
+  if (exerciseId === "def-squat") return maxes.squat;
+  if (exerciseId === "def-bench-press") return maxes.bench;
+  if (exerciseId === "def-deadlift") return maxes.deadlift;
   return null;
 }
 
@@ -47,6 +48,9 @@ export function SetLogger({
   const [intensityType, setIntensityType] = useState<IntensityType>("none");
   const [intensityValue, setIntensityValue] = useState("");
   const [pickerOpen, setPickerOpen] = useState(false);
+  const [beltless, setBeltless] = useState(false);
+  const [straps, setStraps] = useState(false);
+  const [kneeGear, setKneeGear] = useState<string>(KNEE_GEAR[0].value);
 
   const isEditing = editing !== null;
 
@@ -58,6 +62,9 @@ export function SetLogger({
     setStance(editing.stance ?? "conventional");
     setIntensityType(editing.intensityType);
     setIntensityValue(editing.intensityValue === null ? "" : String(editing.intensityValue));
+    setBeltless(editing.beltless ?? false);
+    setStraps(editing.straps ?? false);
+    setKneeGear(editing.kneeGear ?? KNEE_GEAR[0].value);
     // `unit` is intentionally excluded: re-running on a unit switch would
     // overwrite what the user has typed.
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -103,6 +110,9 @@ export function SetLogger({
       intensityType,
       intensityValue: intensityType === "none" ? null : intensityNum,
       ...(exercise!.hasStance ? { stance } : {}),
+      ...(exercise!.belt ? { beltless } : {}),
+      ...(exercise!.straps ? { straps } : {}),
+      ...(exercise!.kneeGear ? { kneeGear } : {}),
     };
   }
 
@@ -148,8 +158,14 @@ export function SetLogger({
         </div>
 
         <div className="field">
-          <span className="field-label">Reps</span>
-          <NumberField label="Reps" value={reps} onChange={setReps} step={1} placeholder="0" />
+          <span className="field-label">{exercise?.timed ? "Seconds" : "Reps"}</span>
+          <NumberField
+            label={exercise?.timed ? "Seconds held" : "Reps"}
+            value={reps}
+            onChange={setReps}
+            step={exercise?.timed ? 5 : 1}
+            placeholder="0"
+          />
         </div>
 
         {!isEditing && (
@@ -174,6 +190,57 @@ export function SetLogger({
               </button>
             ))}
           </div>
+        </div>
+      )}
+
+      {(exercise?.belt || exercise?.straps || exercise?.kneeGear) && (
+        <div className="intensity">
+          <div className="intensity-label">Gear</div>
+          <div className="intensity-row">
+            {exercise.belt && (
+              <button
+                type="button"
+                className="check-row"
+                aria-pressed={beltless}
+                onClick={() => setBeltless((v) => !v)}
+              >
+                <span className={beltless ? "checkbox on" : "checkbox"}>
+                  {beltless && <Check aria-hidden="true" />}
+                </span>
+                <span className="ct">Beltless</span>
+              </button>
+            )}
+
+            {exercise.straps && (
+              <button
+                type="button"
+                className="check-row"
+                aria-pressed={straps}
+                onClick={() => setStraps((v) => !v)}
+              >
+                <span className={straps ? "checkbox on" : "checkbox"}>
+                  {straps && <Check aria-hidden="true" />}
+                </span>
+                <span className="ct">Straps</span>
+              </button>
+            )}
+          </div>
+
+          {exercise.kneeGear && (
+            <div className="intensity-row" style={{ marginTop: 10 }}>
+              <div className="seg subtle">
+                {KNEE_GEAR.map((g) => (
+                  <button
+                    key={g.value}
+                    className={kneeGear === g.value ? "seg-opt on" : "seg-opt"}
+                    onClick={() => setKneeGear(g.value)}
+                  >
+                    {g.label}
+                  </button>
+                ))}
+              </div>
+            </div>
+          )}
         </div>
       )}
 

@@ -2,6 +2,7 @@ import { useState } from "react";
 import { TodayPane } from "./TodayPane";
 import { PantryPane } from "./PantryPane";
 import { GoalsPane } from "./GoalsPane";
+import { FoodCalendar } from "./FoodCalendar";
 import { useFood } from "../../hooks/useFood";
 import { todayKey } from "../../lib/format";
 import type { Unit } from "../../lib/types";
@@ -21,6 +22,7 @@ const PANES: { key: Pane; label: string }[] = [
 export function FoodTab({ unit }: Props) {
   const [pane, setPane] = useState<Pane>("today");
   const [date, setDate] = useState(todayKey());
+  const [calendarOpen, setCalendarOpen] = useState(false);
   const { state, pantry, getDay, updateDay, setGoals, addFood, removeFood } = useFood();
 
   return (
@@ -52,6 +54,21 @@ export function FoodTab({ unit }: Props) {
           unit={unit}
           onUpdateDay={(patch) => updateDay(date, patch)}
           onOpenGoals={() => setPane("goals")}
+          onOpenCalendar={() => setCalendarOpen(true)}
+        />
+      )}
+
+      {calendarOpen && (
+        <FoodCalendar
+          days={state.days}
+          goals={state.goal}
+          unit={unit}
+          initialDate={date}
+          onPick={(next) => {
+            setDate(next);
+            setCalendarOpen(false);
+          }}
+          onClose={() => setCalendarOpen(false)}
         />
       )}
 

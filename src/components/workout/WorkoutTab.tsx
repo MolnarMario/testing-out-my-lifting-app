@@ -5,6 +5,8 @@ import { LogTable } from "./LogTable";
 import { ReadinessCard } from "./ReadinessCard";
 import { SessionCard } from "./SessionCard";
 import { NotesCard } from "./NotesCard";
+import { ExercisesPane } from "./ExercisesPane";
+import { MonthCalendar } from "./MonthCalendar";
 import { useDays } from "../../hooks/useDays";
 import { useLibrary } from "../../hooks/useLibrary";
 import { useMaxes } from "../../hooks/useMaxes";
@@ -16,12 +18,21 @@ interface Props {
   onLoadOnBar: (weight: number) => void;
 }
 
+type Pane = "today" | "calendar" | "exercises";
+
+const PANES: { key: Pane; label: string }[] = [
+  { key: "today", label: "Today" },
+  { key: "calendar", label: "Calendar" },
+  { key: "exercises", label: "Exercises" },
+];
+
 export function WorkoutTab({ unit, onLoadOnBar }: Props) {
+  const [pane, setPane] = useState<Pane>("today");
   const [date, setDate] = useState(todayKey());
   const [editingId, setEditingId] = useState<string | null>(null);
 
-  const { getDay, updateDay } = useDays();
-  const { library } = useLibrary();
+  const { days, getDay, updateDay } = useDays();
+  const { library, removed, addExercise, removeExercise, restoreHidden } = useLibrary();
   const [maxes] = useMaxes();
 
   const day = getDay(date);
@@ -50,6 +61,45 @@ export function WorkoutTab({ unit, onLoadOnBar }: Props) {
 
   return (
     <>
+      <div className="mc-tabs" role="tablist" aria-label="Workout sections">
+        {PANES.map(({ key, label }) => (
+          <button
+            key={key}
+            role="tab"
+            aria-selected={pane === key}
+            className={pane === key ? "mc-tab on" : "mc-tab"}
+            onClick={() => setPane(key)}
+          >
+            {label}
+          </button>
+        ))}
+      </div>
+
+      {pane === "calendar" && (
+        <MonthCalendar
+          days={days}
+          library={library}
+          unit={unit}
+          onOpenDay={(next) => {
+            setDate(next);
+            setEditingId(null);
+            setPane("today");
+          }}
+        />
+      )}
+
+      {pane === "exercises" && (
+        <ExercisesPane
+          library={library}
+          hiddenCount={removed.length}
+          onAdd={addExercise}
+          onRemove={removeExercise}
+          onRestoreHidden={restoreHidden}
+        />
+      )}
+
+      {pane !== "today" ? null : (
+      <>
       <DateBar
         date={date}
         onDateChange={(next) => {
@@ -125,6 +175,8 @@ export function WorkoutTab({ unit, onLoadOnBar }: Props) {
         onToggle={(next) => updateDay(date, (d) => ({ ...d, notesOn: next }))}
         onChange={(v) => updateDay(date, (d) => ({ ...d, notes: v }))}
       />
+      </>
+      )}
     </>
   );
 }
