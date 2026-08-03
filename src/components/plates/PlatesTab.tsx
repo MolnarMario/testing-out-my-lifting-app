@@ -2,6 +2,7 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import type { CSSProperties } from "react";
 import { Barbell } from "./Barbell";
 import {
+  IWF_BAR_DIMS,
   PLATE_CONFIG,
   RIG_DIMS,
   clamp,
@@ -119,19 +120,32 @@ export function PlatesTab({ unit, preset }: Props) {
     setState((prev) => ({ ...prev, requested: Number.isFinite(parsed) ? parsed : null }));
   }
 
-  // Snapping already forces a loadable weight, so `result` is exact whenever it
-  // fired. The moment worth offering micro plates is when the typed value is the
-  // thing that got rounded away.
-  const offerRecordMode = unit === "kg" && snap.snapped && !state.recordMode;
+  // The prompt line has a strict precedence: the two easter eggs outrank
+  // everything, then the kg record-mode offer, then the plain rounding and
+  // minimum notices.
+  const isIwf =
+    state.barDimsKey === IWF_BAR_DIMS &&
+    state.requested !== null &&
+    state.requested > config.iwfLimit;
 
-  let note = "";
-  if (result.status === "below-min") {
-    note = `Bar and collars already weigh ${fmt(result.minWeight)} ${unit}.`;
-  } else if (result.status === "rounded") {
-    note = `Closest loadable is ${fmt(result.shortBy)} ${unit} under.`;
-  } else if (snap.snapped && snap.value !== null) {
-    note = `Rounded to ${fmt(snap.value)} ${unit}.`;
-  }
+  const isEgg = !isIwf && state.requested !== null && state.requested > config.eggLimit;
+
+  const offerRecordMode = !isIwf && !isEgg && snap.snapped && unit === "kg" && !state.recordMode;
+  const roundedNote = !isIwf && !isEgg && snap.snapped && unit === "lb";
+  const belowMin = !isIwf && !isEgg && !snap.snapped && result.status === "below-min";
+
+  const note = belowMin
+    ? `Minimum ${fmt(result.minWeight)} ${unit}`
+    : roundedNote
+      ? `Rounded to ${fmt(result.totalWeight)} ${unit}`
+      : "";
+
+  const showPrompt = isIwf || isEgg || offerRecordMode || roundedNote || belowMin;
+
+  // Loading past the end of the sleeve is physically impossible — and the cue
+  // for the original's Ronnie Coleman flash.
+  const loadedWidth = result.plates.reduce((sum, p) => sum + p.plate.w * p.count, 0);
+  const overflowing = loadedWidth > dims.sleeveLen;
 
   return (
     <div className="pl">
@@ -166,6 +180,7 @@ export function PlatesTab({ unit, preset }: Props) {
         plates={result.plates}
         hasCollar={state.collarsWeight > 0}
         snapCollar={unit === "lb"}
+        overflowing={overflowing}
       />
 
       <section className="pl-controls">
@@ -212,8 +227,8 @@ export function PlatesTab({ unit, preset }: Props) {
             </button>
           </div>
 
-          {(note !== "" || offerRecordMode) && (
-            <div className="pl-prompt">
+          {showPrompt && (
+            <div className={isIwf ? "pl-prompt is-iwf" : "pl-prompt"}>
               {offerRecordMode && (
                 <span className="pl-prompt-record">
                   <span className="pl-prompt-text">Use micro plates?</span>
@@ -236,6 +251,16 @@ export function PlatesTab({ unit, preset }: Props) {
                 </span>
               )}
               {note !== "" && <span className="pl-prompt-text">{note}</span>}
+
+              {isEgg && (
+                <span className="pl-prompt-text pl-prompt-egg">
+                  Relax, buddy. You&apos;re not Jimmy Kolb.
+                </span>
+              )}
+
+              {isIwf && (
+                <span className="pl-prompt-iwf">NEW ALL TIME FEMALE IWF WORLD RECORD</span>
+              )}
             </div>
           )}
         </div>

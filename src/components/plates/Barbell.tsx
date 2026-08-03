@@ -9,9 +9,11 @@ interface Props {
   hasCollar: boolean;
   /** lb collars are the snap-on kind, and sit differently on the sleeve. */
   snapCollar: boolean;
+  /** Plates have run past the end of the sleeve. */
+  overflowing: boolean;
 }
 
-export function Barbell({ dims, plates, hasCollar, snapCollar }: Props) {
+export function Barbell({ dims, plates, hasCollar, snapCollar, overflowing }: Props) {
   const stageRef = useRef<HTMLElement>(null);
   const rigRef = useRef<HTMLDivElement>(null);
   const [scale, setScale] = useState(1);
@@ -63,6 +65,11 @@ export function Barbell({ dims, plates, hasCollar, snapCollar }: Props) {
   return (
     <section className="pl-stage" ref={stageRef} aria-label="Loaded barbell, one sleeve shown">
       <div className="pl-glow" aria-hidden="true" />
+
+      <div className={overflowing ? "pl-lw is-on" : "pl-lw"} aria-hidden="true">
+        <span className="pl-lw1">Yeah buddy!</span>
+        <span className="pl-lw2">Lightweight!</span>
+      </div>
 
       <div className="pl-rig" ref={rigRef} style={rigStyle}>
         <div className="pl-shaft" aria-hidden="true" />

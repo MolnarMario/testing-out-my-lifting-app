@@ -99,7 +99,7 @@ export function WorkoutTab({ unit, onLoadOnBar }: Props) {
       )}
 
       {pane !== "today" ? null : (
-      <>
+      <div className="stagger">
       <DateBar
         date={date}
         onDateChange={(next) => {
@@ -175,7 +175,7 @@ export function WorkoutTab({ unit, onLoadOnBar }: Props) {
         onToggle={(next) => updateDay(date, (d) => ({ ...d, notesOn: next }))}
         onChange={(v) => updateDay(date, (d) => ({ ...d, notes: v }))}
       />
-      </>
+      </div>
       )}
     </>
   );

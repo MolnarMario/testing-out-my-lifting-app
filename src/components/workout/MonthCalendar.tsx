@@ -15,6 +15,9 @@ import {
 import { READINESS_KEYS, READINESS_MAX } from "../../lib/types";
 import type { DayLog, Exercise, Unit } from "../../lib/types";
 import type { DayMap } from "../../hooks/useDays";
+import { useFood } from "../../hooks/useFood";
+import { totalsFor, num } from "../../lib/food";
+import { Droplet, Scale } from "lucide-react";
 
 interface Props {
   days: DayMap;
@@ -22,6 +25,8 @@ interface Props {
   unit: Unit;
   onOpenDay: (date: string) => void;
 }
+
+type View = "training" | "combined";
 
 const GROUP_COLOR: Record<string, string> = {
   "Deadlift / Pull": "#e7402e",
@@ -61,6 +66,10 @@ export function MonthCalendar({ days, library, unit, onOpenDay }: Props) {
     return { year: now.getFullYear(), month: now.getMonth() };
   });
   const [openDate, setOpenDate] = useState<string | null>(null);
+  const [view, setView] = useState<View>("training");
+
+  const { state: foodState } = useFood();
+  const foodGoalKcal = foodState.goal.kcal ?? 0;
 
   const groupOf = useMemo(() => {
     const map = new Map<string, string>();
@@ -168,10 +177,26 @@ export function MonthCalendar({ days, library, unit, onOpenDay }: Props) {
             {g}
           </div>
         ))}
+        <div className="seg subtle" style={{ marginLeft: "auto" }}>
+          {(
+            [
+              ["training", "Training"],
+              ["combined", "+ Food"],
+            ] as const
+          ).map(([key, label]) => (
+            <button
+              key={key}
+              className={view === key ? "seg-opt on" : "seg-opt"}
+              onClick={() => setView(key)}
+            >
+              {label}
+            </button>
+          ))}
+        </div>
       </div>
 
       <div className="month-scroll">
-        <div className="month-grid">
+        <div className={view === "combined" ? "month-grid uni-grid" : "month-grid"}>
           {WEEKDAYS.map((w) => (
             <div className="ov-weekday" key={w}>
               {w}
@@ -197,9 +222,14 @@ export function MonthCalendar({ days, library, unit, onOpenDay }: Props) {
             const shown = perExercise.slice(0, 3);
             const extra = perExercise.length - shown.length;
 
+            const food = view === "combined" ? foodState.days[key] : undefined;
+            const foodTotals = food ? totalsFor(food.entries) : null;
+            const ateSomething = !!foodTotals && foodTotals.kcal > 0;
+
             const classes = [
               "ov-cell",
-              hasWork ? "has" : "",
+              view === "combined" ? "uni-cell" : "",
+              hasWork || ateSomething ? "has" : "",
               key === todayKey() ? "today" : "",
             ]
               .filter(Boolean)
@@ -240,6 +270,51 @@ export function MonthCalendar({ days, library, unit, onOpenDay }: Props) {
                   })}
                   {extra > 0 && <div className="ov-ex ov-more">+{extra} more</div>}
                 </div>
+
+                {view === "combined" && (
+                  <div className="uni-nutri">
+                    {ateSomething ? (
+                      <>
+                        <span className="uni-divider" />
+                        <span
+                          className={
+                            "uni-kcal" +
+                            (foodGoalKcal > 0
+                              ? foodTotals.kcal > foodGoalKcal
+                                ? " over"
+                                : " under"
+                              : "")
+                          }
+                        >
+                          {Math.round(foodTotals.kcal)} kcal
+                        </span>
+                        <span className="ov-nutri">
+                          {num(foodTotals.protein)}P · {num(foodTotals.carbs)}C ·{" "}
+                          {num(foodTotals.fat)}F
+                        </span>
+                      </>
+                    ) : (
+                      <span className="ov-nutri">—</span>
+                    )}
+
+                    {food && (food.water > 0 || food.bw !== null) && (
+                      <div className="uni-extras">
+                        {food.water > 0 && (
+                          <span className="w">
+                            <Droplet aria-hidden="true" />
+                            {Math.round(food.water / 100) / 10}L
+                          </span>
+                        )}
+                        {food.bw !== null && (
+                          <span className="m">
+                            <Scale aria-hidden="true" />
+                            {num(fromKg(food.bw, unit))}
+                          </span>
+                        )}
+                      </div>
+                    )}
+                  </div>
+                )}
               </button>
             );
           })}

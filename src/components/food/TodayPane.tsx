@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { Droplet, Scale } from "lucide-react";
+import { Beef, Droplet, Flame, Scale } from "lucide-react";
 import {
   FOOD_CATEGORIES,
   baseUnitFor,
@@ -202,7 +202,7 @@ export function TodayPane({
         })}
       </div>
 
-      <div className="mc-trackgrid">
+      <div className="mc-trackgrid mc-bio">
         <div className="card tight mc-tcard">
           <div className="mc-th">
             <span className="mc-tl">
@@ -303,6 +303,41 @@ export function TodayPane({
           <div className="mc-tsub">logged for this day</div>
         </div>
       </div>
+
+      {day.bw !== null && day.bw > 0 && totals.kcal > 0 && (
+        <div className="card tight mc-bd">
+          <div className="mc-bd-row">
+            <span className="l">
+              <Beef aria-hidden="true" />
+              Protein per {unit}
+            </span>
+            <span className="v">
+              {num(totals.protein / fromKg(day.bw, unit))}
+              <span className="g"> g</span>
+            </span>
+          </div>
+          <div className="mc-bd-row">
+            <span className="l">
+              <Flame aria-hidden="true" />
+              Calories per {unit}
+            </span>
+            <span className="v">
+              {num(totals.kcal / fromKg(day.bw, unit))}
+              <span className="g"> kcal</span>
+            </span>
+          </div>
+          <div className="mc-bd-row">
+            <span className="l">
+              <Droplet aria-hidden="true" />
+              Water per {unit}
+            </span>
+            <span className="v">
+              {num(day.water / fromKg(day.bw, unit))}
+              <span className="g"> ml</span>
+            </span>
+          </div>
+        </div>
+      )}
 
       <div className="mc-seclab">
         Logged

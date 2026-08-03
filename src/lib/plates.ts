@@ -95,7 +95,14 @@ export interface UnitConfig {
   unit: Unit;
   secondary: Unit;
   toSecondary: (v: number) => string;
+  /** Past the all-time raw total — nobody is lifting this. */
+  eggLimit: number;
+  /** Women's-bar world record threshold. */
+  iwfLimit: number;
 }
+
+/** The women's bar; loading it past iwfLimit is the record easter egg. */
+export const IWF_BAR_DIMS: BarDimsKey = 15;
 
 export const PLATE_CONFIG: Record<Unit, UnitConfig> = {
   kg: {
@@ -116,6 +123,8 @@ export const PLATE_CONFIG: Record<Unit, UnitConfig> = {
     unit: "kg",
     secondary: "lb",
     toSecondary: (v) => (v * 2.20462).toFixed(1),
+    eggLimit: 635.4,
+    iwfLimit: 193,
   },
   lb: {
     plates: LB_PLATES,
@@ -135,6 +144,8 @@ export const PLATE_CONFIG: Record<Unit, UnitConfig> = {
     unit: "lb",
     secondary: "kg",
     toSecondary: (v) => (v * 0.453592).toFixed(1),
+    eggLimit: 1400.8,
+    iwfLimit: 425.5,
   },
 };
 
