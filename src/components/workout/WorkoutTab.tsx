@@ -13,9 +13,10 @@ import type { ReadinessKey, SetEntry, Unit } from "../../lib/types";
 
 interface Props {
   unit: Unit;
+  onLoadOnBar: (weight: number) => void;
 }
 
-export function WorkoutTab({ unit }: Props) {
+export function WorkoutTab({ unit, onLoadOnBar }: Props) {
   const [date, setDate] = useState(todayKey());
   const [editingId, setEditingId] = useState<string | null>(null);
 
@@ -86,6 +87,7 @@ export function WorkoutTab({ unit }: Props) {
           editingId={editingId}
           onEdit={(s) => setEditingId(s.id)}
           onDelete={deleteSet}
+          onLoadOnBar={onLoadOnBar}
         />
 
         {editing && (

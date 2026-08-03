@@ -1,4 +1,4 @@
-import { Dumbbell, Pencil, Trash2 } from "lucide-react";
+import { Dumbbell, Layers, Pencil, Trash2 } from "lucide-react";
 import { formatWeight, fromKg } from "../../lib/format";
 import type { Exercise, SetEntry, Unit } from "../../lib/types";
 
@@ -9,6 +9,7 @@ interface Props {
   editingId: string | null;
   onEdit: (set: SetEntry) => void;
   onDelete: (id: string) => void;
+  onLoadOnBar: (weight: number) => void;
 }
 
 function intensityLabel(set: SetEntry): { text: string; className: string } {
@@ -21,7 +22,15 @@ function intensityLabel(set: SetEntry): { text: string; className: string } {
   return { text: "—", className: "intensity-tag none" };
 }
 
-export function LogTable({ sets, library, unit, editingId, onEdit, onDelete }: Props) {
+export function LogTable({
+  sets,
+  library,
+  unit,
+  editingId,
+  onEdit,
+  onDelete,
+  onLoadOnBar,
+}: Props) {
   if (sets.length === 0) {
     return (
       <div className="empty">
@@ -98,6 +107,13 @@ export function LogTable({ sets, library, unit, editingId, onEdit, onDelete }: P
                   </td>
                   <td>
                     <div className="row-actions">
+                      <button
+                        className="del plates"
+                        onClick={() => onLoadOnBar(fromKg(set.weight, unit))}
+                        aria-label={`Show plate loading for ${formatWeight(fromKg(set.weight, unit), unit)} ${unit}`}
+                      >
+                        <Layers aria-hidden="true" />
+                      </button>
                       <button
                         className="del edit"
                         onClick={() => onEdit(set)}
