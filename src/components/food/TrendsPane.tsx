@@ -136,6 +136,9 @@ export function TrendsPane({ days, goals, unit, onOpenDay, onOpenGoals }: Props)
         legend={[
           { label: "Daily", color: VIZ[4] },
           { label: "7-day average", color: VIZ[0], line: true },
+          ...(kcalGoal > 0
+            ? [{ label: `Target ${Math.round(kcalGoal)}`, color: "var(--muted)", dashed: true }]
+            : []),
         ]}
         summary={`Daily calories against a ${kcalGoal > 0 ? Math.round(kcalGoal) : "n unset"} target, with a seven-day rolling average.`}
         table={{
@@ -152,7 +155,7 @@ export function TrendsPane({ days, goals, unit, onOpenDay, onOpenGoals }: Props)
           labels={kcal.map((d) => d.key)}
           series={[{ label: "Calories", color: VIZ[4], data: kcal.map((d) => d.value ?? 0) }]}
           overlay={{ label: "7-day average", color: VIZ[0], data: kcalAvg }}
-          refLine={kcalGoal > 0 ? { value: kcalGoal, label: "Target" } : undefined}
+          refLine={kcalGoal > 0 ? { value: kcalGoal, label: "" } : undefined}
           yFormat={(v) => String(Math.round(v))}
           xFormat={formatDateShort}
           tip={(i) => {

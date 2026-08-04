@@ -162,9 +162,13 @@ export function BarChart({
                 y2={snap(y(refLine.value))}
                 stroke={refLine.color ?? "var(--muted)"}
               />
-              <text x={width - PAD.right} y={snap(y(refLine.value)) - 5} textAnchor="end" fill={refLine.color ?? "var(--muted)"}>
-                {refLine.label}
-              </text>
+              {/* An empty label means the legend names this line instead —
+                  over dense columns there is nowhere for the text to sit. */}
+              {refLine.label !== "" && (
+                <text x={width - PAD.right} y={snap(y(refLine.value)) - 5} textAnchor="end" fill={refLine.color ?? "var(--muted)"}>
+                  {refLine.label}
+                </text>
+              )}
             </g>
           )}
 

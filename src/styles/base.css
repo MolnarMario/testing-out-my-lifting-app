@@ -1713,7 +1713,9 @@ button.mc-datefield{font:inherit;color:inherit;}
 .chart-bar{transition:opacity .14s;}
 .chart-wrap.hovering .chart-bar{opacity:.45;}
 .chart-wrap.hovering .chart-bar.on{opacity:1;}
-.chart-pr{fill:var(--accent);stroke:var(--panel-lo);stroke-width:2;}
+/* A PR has to be findable at a glance, and the series is already accent red —
+   so the marker is called out by its ring, not by another hue. */
+.chart-pr{fill:var(--viz-1);stroke:var(--text);stroke-width:2;}
 
 .chart-legend{display:flex;flex-wrap:wrap;gap:6px 14px;margin-top:11px;}
 .chart-leg{display:inline-flex;align-items:center;gap:6px;font-family:var(--font-display);text-transform:uppercase;

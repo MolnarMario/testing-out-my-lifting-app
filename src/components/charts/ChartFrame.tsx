@@ -5,6 +5,8 @@ export interface LegendItem {
   color: string;
   /** Draw the swatch as a line rather than a block — for overlays and trends. */
   line?: boolean;
+  /** A dashed line swatch, for reference lines the plot has no room to label. */
+  dashed?: boolean;
 }
 
 interface Props {
@@ -54,8 +56,12 @@ export function ChartFrame({ title, note, legend, summary, table, empty, childre
               {legend.map((item) => (
                 <span className="chart-leg" key={item.label}>
                   <span
-                    className={item.line ? "chart-leg-dot line" : "chart-leg-dot"}
-                    style={{ background: item.color }}
+                    className={item.line || item.dashed ? "chart-leg-dot line" : "chart-leg-dot"}
+                    style={
+                      item.dashed
+                        ? { backgroundImage: `repeating-linear-gradient(90deg, ${item.color} 0 4px, transparent 4px 7px)` }
+                        : { background: item.color }
+                    }
                   />
                   {item.label}
                 </span>
@@ -63,8 +69,12 @@ export function ChartFrame({ title, note, legend, summary, table, empty, childre
             </div>
           )}
 
+          {/* The wrapper carries .sr-only, not the table: table layout treats
+              width as a minimum and ignores the 1px, so a bare .sr-only table
+              lays out at full content width and widens the whole document. */}
           {table && (
-            <table className="sr-only">
+            <div className="sr-only">
+            <table>
               <caption>{title}</caption>
               <thead>
                 <tr>
@@ -83,6 +93,7 @@ export function ChartFrame({ title, note, legend, summary, table, empty, childre
                 ))}
               </tbody>
             </table>
+            </div>
           )}
         </figure>
       )}
