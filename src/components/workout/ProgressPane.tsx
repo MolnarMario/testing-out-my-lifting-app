@@ -16,6 +16,7 @@ import {
   bodyweightSeries,
   dataBounds,
   e1rmSeries,
+  personalRecords,
   sessionHeatmap,
   trainingKpis,
   weeklySetsByGroup,
@@ -45,6 +46,9 @@ const MAX_FOR: Record<string, keyof Maxes> = {
   "def-bench-press": "bench",
   "def-deadlift": "deadlift",
 };
+
+/** How many records the card lists before it starts costing more than it gives. */
+const PR_ROWS = 8;
 
 /** Tonnage runs into six figures; the axis says 12k, the tooltip says the rest. */
 function compact(value: number): string {
@@ -94,6 +98,7 @@ export function ProgressPane({ days, library, maxes, unit, onOpenDay }: Props) {
 
   const activeLift = library.some((e) => e.id === liftId) ? liftId : defaultLift;
   const lift = library.find((e) => e.id === activeLift) ?? null;
+  const nameOf = useMemo(() => new Map(library.map((e) => [e.id, e.name])), [library]);
 
   const kpis = useMemo(() => trainingKpis(days, range), [days, range]);
 
@@ -113,6 +118,10 @@ export function ProgressPane({ days, library, maxes, unit, onOpenDay }: Props) {
     [days, library, range],
   );
   const heat = useMemo(() => sessionHeatmap(days, range), [days, range]);
+  const records = useMemo(
+    () => personalRecords(days, library, range.from),
+    [days, library, range.from],
+  );
   const e1rm = useMemo(
     () => (activeLift ? e1rmSeries(days, activeLift, range) : []),
     [days, activeLift, range],
@@ -136,7 +145,13 @@ export function ProgressPane({ days, library, maxes, unit, onOpenDay }: Props) {
   const w = (kg: number) => formatWeight(fromKg(kg, unit), unit);
   const maxKey = lift ? MAX_FOR[lift.id] : undefined;
   const manualMax = maxKey ? maxes[maxKey] : null;
+  const hasManualMax = manualMax !== null && manualMax > 0;
 
+  const newRecords = records.filter((r) => r.recent).length;
+  // A lifter with twenty movements in their library would otherwise turn this
+  // card into the longest thing on the page. The chart above covers the rest.
+  const shownRecords = records.slice(0, PR_ROWS);
+  const hiddenRecords = records.length - shownRecords.length;
   const trained = e1rm.length;
   const latest = e1rm[trained - 1] ?? null;
   const first = e1rm[0] ?? null;
@@ -177,6 +192,14 @@ export function ProgressPane({ days, library, maxes, unit, onOpenDay }: Props) {
             {lift ? lift.name : "Pick a lift"}
           </button>
         }
+        legend={
+          hasManualMax
+            ? [
+                { label: lift?.name ?? "Lift", color: VIZ[0], line: true },
+                { label: `Entered max ${w(manualMax)} ${unit}`, color: "var(--muted)", dashed: true },
+              ]
+            : undefined
+        }
         summary={
           latest
             ? `Estimated one-rep max for ${lift?.name}, ${trained} sessions, latest ${w(latest.e1rm)} ${unit}.`
@@ -209,11 +232,7 @@ export function ProgressPane({ days, library, maxes, unit, onOpenDay }: Props) {
             },
           ]}
           highlight={e1rm.map((p, i) => (p.pr ? i : -1)).filter((i) => i >= 0)}
-          refLines={
-            manualMax !== null && manualMax > 0
-              ? [{ value: manualMax, label: `Entered max ${w(manualMax)}` }]
-              : []
-          }
+          refLines={hasManualMax ? [{ value: manualMax, label: "" }] : []}
           yFormat={(v) => w(v)}
           xFormat={formatDateShort}
           tip={(i) => {
@@ -246,6 +265,85 @@ export function ProgressPane({ days, library, maxes, unit, onOpenDay }: Props) {
           </p>
         )}
       </ChartFrame>
+
+      <div className="card">
+        <div className="card-head">
+          <div className="card-title">Recent records</div>
+          <span className="card-note">
+            All-time bests
+            {newRecords > 0 && ` · ${newRecords} new`}
+          </span>
+        </div>
+
+        {records.length === 0 ? (
+          <div className="mc-empty" style={{ marginTop: 14 }}>
+            <span className="mc-pin">No records yet</span>
+            Log a weighted set and the best estimate for each lift lands here.
+          </div>
+        ) : (
+          <div className="log-table-wrap">
+            <table className="log preview">
+              <thead>
+                <tr>
+                  <th>Lift</th>
+                  <th className="ralign">Best set</th>
+                  <th className="ralign">Est. 1RM</th>
+                  <th className="ralign">Set on</th>
+                </tr>
+              </thead>
+              <tbody>
+                {shownRecords.map((pr) => (
+                  <tr key={pr.exerciseId}>
+                    <td>
+                      <div className="pr-name">
+                        {nameOf.get(pr.exerciseId) ?? "Unknown"}
+                        {pr.recent && <span className="auto-note">New</span>}
+                      </div>
+                    </td>
+                    <td className="ralign">
+                      <span className="wt">
+                        {w(pr.weight)}
+                        <span className="u">{unit}</span>
+                      </span>
+                      <span className="reps"> × {pr.reps}</span>
+                      {/* The heaviest bar is its own kind of record, and it is
+                          usually a different day to the best estimate. */}
+                      {pr.topWeight > pr.weight && (
+                        <div className="pr-sub">
+                          heaviest {w(pr.topWeight)} {unit} × {pr.topWeightReps}
+                        </div>
+                      )}
+                    </td>
+                    <td className="ralign">
+                      <span className="wt">
+                        {w(pr.e1rm)}
+                        <span className="u">{unit}</span>
+                      </span>
+                    </td>
+                    <td className="ralign">
+                      <button className="mc-ub" onClick={() => onOpenDay(pr.key)}>
+                        {formatDateShort(pr.key)}
+                      </button>
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        )}
+
+        <p className="chart-hint">
+          Best Epley estimate per lift, across everything logged — the range above only decides what
+          counts as new. Timed holds and unweighted sets are left out.
+          {hiddenRecords > 0 && (
+            <>
+              {" "}
+              {hiddenRecords} older {hiddenRecords === 1 ? "lift is" : "lifts are"} not shown; pick
+              one above to see its history.
+            </>
+          )}
+        </p>
+      </div>
 
       <ChartFrame
         title="Weekly volume"

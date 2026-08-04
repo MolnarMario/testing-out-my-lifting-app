@@ -19,6 +19,7 @@ import {
   macroAverages,
   macroShareSeries,
   nutritionKpis,
+  personalRecords,
   proteinPerKgSeries,
   setVolume,
   trainingKpis,
@@ -186,6 +187,40 @@ check(
 check("trainingKpis best streak stops at the empty week", kpis.bestWeekStreak, 2);
 check("trainingKpis rate over three weeks", r2(kpis.perWeek), 1);
 check("trainingKpis ignores an empty range", trainingKpis({}, RANGE).sessions, 0);
+
+// --- personal records --------------------------------------------------------
+
+const PR_DAYS: DayMap = {
+  // Heaviest bar ever, but only a single — beaten on estimate by the triple below.
+  "2026-01-05": day([set({ id: "p1", weight: 200, reps: 1 })]),
+  "2026-01-07": day([set({ id: "p2", weight: 185, reps: 3 })]),
+  // Matching the record later must not move the date.
+  "2026-01-12": day([set({ id: "p3", weight: 185, reps: 3 })]),
+  // A timed hold and a bodyweight set: neither has a meaningful 1RM.
+  "2026-01-14": day([
+    set({ id: "p4", exerciseId: "plank", weight: 0, reps: 1 }),
+    set({ id: "p5", exerciseId: "pullup", weight: 0, reps: 12 }),
+    set({ id: "p6", exerciseId: "bench", weight: 100, reps: 5 }),
+  ]),
+};
+
+const PR_LIB = [
+  { id: "squat", name: "Squat", group: "Squat / Legs" },
+  { id: "bench", name: "Bench", group: "Bench / Press" },
+  { id: "pullup", name: "Pull-Up", group: "Deadlift / Pull" },
+  { id: "plank", name: "Plank", group: "Abs / Core", timed: true },
+];
+
+const prs = personalRecords(PR_DAYS, PR_LIB, "2026-01-13");
+
+check("PRs are listed most recent first", prs.map((p) => p.exerciseId), ["bench", "squat"]);
+// 185x3 estimates 203.5, beating the 200 kg single.
+check("PR takes the best estimate, not the heaviest bar", [r2(prs[1].e1rm), prs[1].weight, prs[1].reps], [203.5, 185, 3]);
+check("PR keeps the heaviest single alongside it", [prs[1].topWeight, prs[1].topWeightKey], [200, "2026-01-05"]);
+check("matching a record does not move its date", prs[1].key, "2026-01-07");
+check("only records set inside the range are flagged new", prs.map((p) => p.recent), [true, false]);
+check("timed and bodyweight lifts are left out", prs.some((p) => p.exerciseId === "plank" || p.exerciseId === "pullup"), false);
+check("no records without training", personalRecords({}, PR_LIB, "2026-01-01"), []);
 
 // --- nutrition ---------------------------------------------------------------
 

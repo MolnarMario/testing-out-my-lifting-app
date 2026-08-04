@@ -170,6 +170,84 @@ export function weeklySetsByGroup(
   return [...weeks].map(([week, value]) => ({ week, value }));
 }
 
+export interface PersonalRecord {
+  exerciseId: string;
+  /** Best estimated 1RM ever logged for this lift, kg. */
+  e1rm: number;
+  /** The set that produced it. */
+  weight: number;
+  reps: number;
+  /** The day it was first hit. */
+  key: string;
+  /** Heaviest weight ever moved, which is often a different session. */
+  topWeight: number;
+  topWeightReps: number;
+  topWeightKey: string;
+  /** Set within the range currently on screen. */
+  recent: boolean;
+}
+
+/**
+ * The best estimated 1RM for every lift, most recently set first.
+ *
+ * All-time by design: a record does not stop being a record because the chart
+ * above is showing four weeks. `since` only decides which rows are flagged as
+ * newly set.
+ *
+ * Ties keep the earlier date — matching a record is not setting one, so the
+ * day it first went up is the day that belongs in the list.
+ */
+export function personalRecords(
+  days: DayMap,
+  library: Exercise[],
+  since: string,
+): PersonalRecord[] {
+  // Timed holds have no meaningful one-rep max, and a lift the user has taken
+  // out of their library should not resurface here.
+  const eligible = new Map(library.filter((e) => !e.timed).map((e) => [e.id, e]));
+  const best = new Map<string, PersonalRecord>();
+
+  for (const key of Object.keys(days).sort()) {
+    for (const s of days[key].sets) {
+      // Bodyweight work logged at zero would estimate a 0 kg max.
+      if (!eligible.has(s.exerciseId) || s.weight <= 0 || s.reps <= 0) continue;
+
+      const est = estimate1RM(s.weight, s.reps);
+      const current = best.get(s.exerciseId);
+
+      if (!current) {
+        best.set(s.exerciseId, {
+          exerciseId: s.exerciseId,
+          e1rm: est,
+          weight: s.weight,
+          reps: s.reps,
+          key,
+          topWeight: s.weight,
+          topWeightReps: s.reps,
+          topWeightKey: key,
+          recent: key >= since,
+        });
+        continue;
+      }
+
+      if (est > current.e1rm) {
+        current.e1rm = est;
+        current.weight = s.weight;
+        current.reps = s.reps;
+        current.key = key;
+        current.recent = key >= since;
+      }
+      if (s.weight > current.topWeight) {
+        current.topWeight = s.weight;
+        current.topWeightReps = s.reps;
+        current.topWeightKey = key;
+      }
+    }
+  }
+
+  return [...best.values()].sort((a, b) => b.key.localeCompare(a.key) || b.e1rm - a.e1rm);
+}
+
 export interface HeatCell {
   key: string;
   sets: number;

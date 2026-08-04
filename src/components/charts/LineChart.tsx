@@ -160,9 +160,14 @@ export function LineChart({
                 y2={snap(y(r.value))}
                 stroke={r.color ?? "var(--muted)"}
               />
-              <text x={width - PAD.right} y={snap(y(r.value)) - 5} textAnchor="end" fill={r.color ?? "var(--muted)"}>
-                {r.label}
-              </text>
+              {/* An empty label hands identification to the legend — once the
+                  series climbs past the reference there is nowhere safe to
+                  put text on the line itself. */}
+              {r.label !== "" && (
+                <text x={width - PAD.right} y={snap(y(r.value)) - 5} textAnchor="end" fill={r.color ?? "var(--muted)"}>
+                  {r.label}
+                </text>
+              )}
             </g>
           ))}
 
