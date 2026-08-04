@@ -62,4 +62,4 @@ Vite entry, not the published page — it cannot be the build output as well.
   canonical kg: in lb mode the bar really is 45 lb and the plates really are 45/35/25s,
   not converted kilos. It solves in thousandths so 0.25 kg plates don't drift.
 
-**Live (legacy build): https://molnarmario.github.io/testing-out-my-lifting-app/**
+**Live: https://molnarmario.github.io/testing-out-my-lifting-app/**
