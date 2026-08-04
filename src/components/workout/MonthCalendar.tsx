@@ -387,6 +387,20 @@ function DayModal({ date, day, nameOf, unit, onClose, onOpenDay }: ModalProps) {
             </div>
           )}
 
+          {day.rating > 0 && (
+            <div className="meter-solo">
+              <div className="meter-head">
+                <span className="meter-label">Session</span>
+                <span className="meter-val">{day.rating}</span>
+              </div>
+              <div className="meter-cells">
+                {Array.from({ length: READINESS_MAX }, (_, i) => i + 1).map((n) => (
+                  <span key={n} className={n <= day.rating ? "cell on" : "cell"} />
+                ))}
+              </div>
+            </div>
+          )}
+
           <table className="log preview">
             <thead>
               <tr>

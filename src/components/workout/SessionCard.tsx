@@ -1,23 +1,28 @@
-import { RotateCcw, Timer } from "lucide-react";
+import { Gauge, RotateCcw, Timer } from "lucide-react";
 import { NumberField } from "../NumberField";
+import { Meter } from "../Meter";
 import { durationBetween, formatDuration } from "../../lib/format";
 
 interface Props {
   start: string;
   end: string;
   manualMin: number | null;
+  rating: number;
   onStartChange: (v: string) => void;
   onEndChange: (v: string) => void;
   onManualChange: (v: number | null) => void;
+  onRatingChange: (v: number) => void;
 }
 
 export function SessionCard({
   start,
   end,
   manualMin,
+  rating,
   onStartChange,
   onEndChange,
   onManualChange,
+  onRatingChange,
 }: Props) {
   const auto = durationBetween(start, end);
   const effective = manualMin ?? auto;
@@ -72,6 +77,15 @@ export function SessionCard({
             )}
           </div>
         </div>
+      </div>
+
+      <div className="meter-solo">
+        <Meter
+          label="Session"
+          icon={<Gauge aria-hidden="true" />}
+          value={rating}
+          onChange={onRatingChange}
+        />
       </div>
 
       <div className="manual-line">

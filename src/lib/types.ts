@@ -52,6 +52,8 @@ export interface DayLog {
   sessionEnd: string;
   /** Overrides the start/end calculation when set. */
   manualDurationMin: number | null;
+  /** How the session itself went, 0..READINESS_MAX. */
+  rating: number;
 }
 
 export interface Exercise {
@@ -90,5 +92,6 @@ export function emptyDay(): DayLog {
     sessionStart: "",
     sessionEnd: "",
     manualDurationMin: null,
+    rating: 0,
   };
 }

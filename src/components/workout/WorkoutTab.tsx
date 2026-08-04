@@ -164,9 +164,11 @@ export function WorkoutTab({ unit, onLoadOnBar }: Props) {
         start={day.sessionStart}
         end={day.sessionEnd}
         manualMin={day.manualDurationMin}
+        rating={day.rating}
         onStartChange={(v) => updateDay(date, (d) => ({ ...d, sessionStart: v }))}
         onEndChange={(v) => updateDay(date, (d) => ({ ...d, sessionEnd: v }))}
         onManualChange={(v) => updateDay(date, (d) => ({ ...d, manualDurationMin: v }))}
+        onRatingChange={(v) => updateDay(date, (d) => ({ ...d, rating: v }))}
       />
 
       <NotesCard

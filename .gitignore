@@ -5,3 +5,5 @@ dist/
 
 # AI Hive workspace coordination, not project code
 .aihive/
+
+# docs/ is the build output and IS committed — GitHub Pages serves it.

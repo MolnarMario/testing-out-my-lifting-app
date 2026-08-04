@@ -8,6 +8,8 @@ import type { PlatePreset } from "./components/plates/PlatesTab";
 import { FoodTab } from "./components/food/FoodTab";
 import { useUnit } from "./hooks/useUnit";
 import { usePersistenceBroken } from "./hooks/useLocalStorage";
+import { migrationAvailable, runMigration } from "./lib/migrate";
+import type { MigrationReport } from "./lib/migrate";
 import type { TabKey } from "./lib/types";
 
 export default function App() {
@@ -15,6 +17,8 @@ export default function App() {
   const [unit, setUnit] = useUnit();
   const persistenceBroken = usePersistenceBroken();
   const [platePreset, setPlatePreset] = useState<PlatePreset | null>(null);
+  const [canImport, setCanImport] = useState(() => migrationAvailable());
+  const [imported, setImported] = useState<MigrationReport | null>(null);
 
   /** Sends a logged set's weight (in display units) to the plate loader. */
   function loadOnBar(weight: number) {
@@ -33,6 +37,59 @@ export default function App() {
             This browser is not saving your data — private mode or full storage. Anything you log
             now will be lost when you close the tab.
           </span>
+        </div>
+      )}
+
+      {canImport && (
+        <div className="warn-banner" role="status" style={{ borderColor: "var(--accent-line)" }}>
+          <TriangleAlert aria-hidden="true" />
+          <span>
+            Training data from the old version of Ironlog is on this device. Import it? Your
+            original data is left in place either way.
+          </span>
+          <button
+            className="btn btn-primary"
+            style={{ flex: "0 0 auto", padding: "8px 14px" }}
+            onClick={() => {
+              setImported(runMigration());
+              setCanImport(false);
+            }}
+          >
+            Import
+          </button>
+          <button
+            className="btn btn-ghost"
+            style={{ flex: "0 0 auto", padding: "8px 14px" }}
+            onClick={() => setCanImport(false)}
+          >
+            Not now
+          </button>
+        </div>
+      )}
+
+      {imported?.ran && (
+        <div className="warn-banner" role="status" style={{ borderColor: "var(--border-2)" }}>
+          <span>
+            Imported {imported.days} {imported.days === 1 ? "day" : "days"} and {imported.sets}{" "}
+            {imported.sets === 1 ? "set" : "sets"}
+            {imported.foodDays > 0 && `, plus ${imported.foodDays} days of food`}.
+            {imported.unmatchedExercises.length > 0 && (
+              <>
+                {" "}
+                Skipped sets for {imported.unmatchedExercises.length} unrecognised{" "}
+                {imported.unmatchedExercises.length === 1 ? "exercise" : "exercises"}:{" "}
+                {imported.unmatchedExercises.join(", ")}.
+              </>
+            )}{" "}
+            Reload to see it.
+          </span>
+          <button
+            className="btn btn-primary"
+            style={{ flex: "0 0 auto", padding: "8px 14px" }}
+            onClick={() => window.location.reload()}
+          >
+            Reload
+          </button>
         </div>
       )}
 

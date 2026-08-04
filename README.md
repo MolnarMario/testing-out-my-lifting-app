@@ -33,8 +33,23 @@ Parity is tracked by diffing every class in `base.css` against the source. 17
 classes remain unreferenced and **all 17 were already dead in the original
 build** — every style the original actually used is now driven by this code.
 
-**The rewrite does not read data saved by the legacy build.** The storage shapes are
-different and no migration is provided, so the two are effectively separate apps.
+## Importing data from the original build
+
+On first load, if data written by the original single-file build is found on the
+device, a banner offers to import it. It maps the old shapes onto the new —
+resolving each set's exercise by name, converting weights into canonical
+kilograms, renaming the can counter — and reports how many days and sets came
+across, naming any exercise it could not resolve so nothing goes missing
+silently.
+
+It runs at most once (guarded by `ironlog.migrated.v1`) and **never deletes the
+original keys**, so a bad import can be retried by clearing that marker.
+
+## Deploying
+
+`npm run build` writes to `docs/`, which is committed. Point GitHub Pages at
+**main → /docs** and the existing URL keeps working. Root `index.html` is the
+Vite entry, not the published page — it cannot be the build output as well.
 
 ## Notes
 
