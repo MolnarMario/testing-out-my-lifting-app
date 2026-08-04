@@ -121,14 +121,46 @@ export function mapNutriments(nutriments: Nutriments): {
   return { fields, found };
 }
 
-/** Drinks are measured in millilitres; the pantry needs to know which. */
+/**
+ * Roots of the tag tree that describe "edible thing" rather than what something
+ * is. "plant-based-foods-and-beverages" sits above almonds and oat flakes alike,
+ * so reading it as a drink turns half the pantry into liquid.
+ */
+const VAGUE_TAG = /foods?-and-beverages|^\w+:(groceries|a)$/;
+
+const LIQUID_TAG = /\b(beverages?|drinks?|waters?|juices?|sodas?|colas?|milks?|bauturi?)\b/;
+
+/** Tags carry capitals and locale prefixes; everything is matched folded. */
+function usableTags(raw: unknown): string[] {
+  if (!Array.isArray(raw)) return [];
+  return raw
+    .filter((tag): tag is string => typeof tag === "string")
+    .map((tag) => tag.toLowerCase())
+    .filter((tag) => !VAGUE_TAG.test(tag));
+}
+
+/**
+ * Solid or liquid — which decides whether the pantry counts this in grams or
+ * millilitres.
+ *
+ * The pack's declared quantity is the strongest signal available, because it is
+ * the same unit the label's per-100 figures are declared in: yoghurt sold as
+ * "140 g" is measured in grams however drinkable it looks. Tags are only a
+ * fallback for entries with no quantity at all.
+ */
 export function guessType(product: { quantity?: unknown; categories_tags?: unknown }): FoodType {
   const quantity = typeof product.quantity === "string" ? product.quantity.toLowerCase() : "";
-  if (/\d\s*(ml|l|cl)\b/.test(quantity)) return "liquid";
 
-  const tags = Array.isArray(product.categories_tags) ? product.categories_tags : [];
-  const joined = tags.filter((tag): tag is string => typeof tag === "string").join(" ");
-  return /beverage|drink|water|juice|soda|milk|bautur/.test(joined) ? "liquid" : "solid";
+  if (/\d\s*(k?g|grame?)\b/.test(quantity)) return "solid";
+  if (/\d\s*(ml|cl|l|litr[iu]|litre)\b/.test(quantity)) return "liquid";
+
+  // Most specific first, so "mineral-waters" is reached before anything broad.
+  const tags = usableTags(product.categories_tags);
+  for (let i = tags.length - 1; i >= 0; i--) {
+    if (LIQUID_TAG.test(tags[i])) return "liquid";
+  }
+
+  return "solid";
 }
 
 /**
@@ -157,18 +189,15 @@ const CATEGORY_RULES: { pattern: RegExp; cat: FoodCategory }[] = [
   { pattern: /\bfats?\b|\boils?\b|sauce|condiment|spread|butter|ulei|\bsos\b|\bunt\b/, cat: "Fats & Condiments" },
 ];
 
-export function guessCategory(tags: unknown): FoodCategory {
-  if (!Array.isArray(tags)) return "Other";
+export function guessCategory(raw: unknown): FoodCategory {
+  const tags = usableTags(raw);
 
   // Tags run general to specific, so the last one that matches anything is the
   // most precise description of what the product actually is. Testing them one
   // at a time is what makes that true — joined together, the broad tag's words
   // would win whenever its rule happened to be listed first.
   for (let i = tags.length - 1; i >= 0; i--) {
-    const tag = tags[i];
-    if (typeof tag !== "string") continue;
-
-    const rule = CATEGORY_RULES.find((candidate) => candidate.pattern.test(tag));
+    const rule = CATEGORY_RULES.find((candidate) => candidate.pattern.test(tags[i]));
     if (rule !== undefined) return rule.cat;
   }
 
@@ -234,25 +263,111 @@ function detector(): BarcodeDetectorConstructor | null {
   return typeof candidate === "function" ? candidate : null;
 }
 
-export function canDetectBarcodes(): boolean {
-  return detector() !== null;
+/** ZXing is happiest well under camera resolution, and far quicker there. */
+const ZXING_MAX_EDGE = 1600;
+
+/**
+ * Greyscale pixels at a workable size, plus a quarter turn of them.
+ *
+ * A barcode on a box or a can is as often photographed sideways as upright, and
+ * ZXing's 1-D readers only sweep horizontal lines — the platform detector handles
+ * orientation itself, but the fallback has to be handed both ways round.
+ */
+function luminances(bitmap: ImageBitmap, quarterTurn: boolean): {
+  data: Uint8ClampedArray;
+  width: number;
+  height: number;
+} | null {
+  const scale = Math.min(1, ZXING_MAX_EDGE / Math.max(bitmap.width, bitmap.height));
+  const w = Math.max(1, Math.round(bitmap.width * scale));
+  const h = Math.max(1, Math.round(bitmap.height * scale));
+
+  const width = quarterTurn ? h : w;
+  const height = quarterTurn ? w : h;
+
+  const canvas = document.createElement("canvas");
+  canvas.width = width;
+  canvas.height = height;
+
+  const context = canvas.getContext("2d", { willReadFrequently: true });
+  if (context === null) return null;
+
+  if (quarterTurn) {
+    context.translate(width, 0);
+    context.rotate(Math.PI / 2);
+  }
+  context.drawImage(bitmap, 0, 0, w, h);
+
+  const { data } = context.getImageData(0, 0, width, height);
+
+  // A Uint8ClampedArray is read as one luminance byte per pixel; an RGBA frame
+  // handed over whole would be decoded as noise.
+  const grey = new Uint8ClampedArray(width * height);
+  for (let i = 0, p = 0; p < grey.length; i += 4, p++) {
+    grey[p] = (data[i] * 299 + data[i + 1] * 587 + data[i + 2] * 114) / 1000;
+  }
+
+  return { data: grey, width, height };
+}
+
+/** The fallback for browsers with no BarcodeDetector. Loaded only when one is needed. */
+async function zxingDetect(bitmap: ImageBitmap): Promise<string | null> {
+  const { BarcodeFormat, BinaryBitmap, DecodeHintType, HybridBinarizer, MultiFormatReader, RGBLuminanceSource } =
+    await import("@zxing/library");
+
+  const hints = new Map<number, unknown>([
+    [
+      DecodeHintType.POSSIBLE_FORMATS,
+      [BarcodeFormat.EAN_13, BarcodeFormat.EAN_8, BarcodeFormat.UPC_A, BarcodeFormat.UPC_E],
+    ],
+    // A label photo is one still frame, not a live viewfinder, so the extra
+    // passes cost a moment once rather than every frame.
+    [DecodeHintType.TRY_HARDER, true],
+  ]);
+
+  const reader = new MultiFormatReader();
+
+  for (const quarterTurn of [false, true]) {
+    const frame = luminances(bitmap, quarterTurn);
+    if (frame === null) return null;
+
+    try {
+      const source = new RGBLuminanceSource(frame.data, frame.width, frame.height);
+      const result = reader.decode(
+        new BinaryBitmap(new HybridBinarizer(source)),
+        hints as Map<never, never>,
+      );
+      const code = result.getText();
+      if (isValidBarcode(code)) return code;
+    } catch {
+      // NotFoundException is the ordinary "no barcode this way round"; try the other.
+    }
+  }
+
+  return null;
 }
 
 /** Reads the first plausible product barcode out of an image, if there is one. */
 export async function detectBarcode(image: Blob): Promise<string | null> {
-  const Detector = detector();
-  if (Detector === null) return null;
-
   let bitmap: ImageBitmap | null = null;
   try {
     bitmap = await createImageBitmap(image, { imageOrientation: "from-image" });
-    const codes = await new Detector({
-      formats: ["ean_13", "ean_8", "upc_a", "upc_e"],
-    }).detect(bitmap);
 
-    // A misread check digit means someone else's macros, so only a valid code
-    // is worth acting on.
-    return codes.map((code) => code.rawValue).find(isValidBarcode) ?? null;
+    // The platform detector is faster and handles orientation itself, so it goes
+    // first wherever it exists; ZXing covers everywhere else.
+    const Detector = detector();
+    if (Detector !== null) {
+      const codes = await new Detector({
+        formats: ["ean_13", "ean_8", "upc_a", "upc_e"],
+      }).detect(bitmap);
+
+      // A misread check digit means someone else's macros, so only a valid code
+      // is worth acting on.
+      const native = codes.map((code) => code.rawValue).find(isValidBarcode);
+      if (native !== undefined) return native;
+    }
+
+    return await zxingDetect(bitmap);
   } catch {
     // An unsupported format or a decode failure is just a miss.
     return null;

@@ -72,9 +72,9 @@ check(
 check(
   "kcal is derived from energy-kj_100g",
   mapNutriments({ "energy-kj_100g": 1996 }).fields.kcal,
-  477.05,
+  477.06,
 );
-check("kcal is derived from energy_100g", mapNutriments({ energy_100g: 1996 }).fields.kcal, 477.05);
+check("kcal is derived from energy_100g", mapNutriments({ energy_100g: 1996 }).fields.kcal, 477.06);
 check(
   "an explicit kcal beats the kJ figure",
   mapNutriments({ "energy-kcal_100g": 477, "energy-kj_100g": 9999 }).fields.kcal,
@@ -100,7 +100,10 @@ check("zero is a real value", mapNutriments({ "energy-kcal_100g": 0 }).found.kca
 
 check("millilitres mean liquid", guessType({ quantity: "500 ml" }), "liquid");
 check("litres mean liquid", guessType({ quantity: "1,5 L" }), "liquid");
+check("romanian litri means liquid", guessType({ quantity: "1.5 litri" }), "liquid");
 check("grams mean solid", guessType({ quantity: "250 g" }), "solid");
+check("kilograms mean solid", guessType({ quantity: "1 kg" }), "solid");
+check("no space still parses", guessType({ quantity: "140g" }), "solid");
 check(
   "a beverage tag means liquid",
   guessType({ categories_tags: ["en:beverages", "en:sodas"] }),
@@ -108,6 +111,56 @@ check(
 );
 check("milk is liquid", guessType({ categories_tags: ["en:dairies", "en:milks"] }), "liquid");
 check("nothing to go on means solid", guessType({}), "solid");
+
+// Every case below came back wrong against the live database before the tag
+// handling was tightened, and they are the common shape of Romanian entries.
+
+// "plant-based-foods-and-beverages" is the root above almonds and oats alike;
+// reading it as a drink turned half the pantry liquid.
+check(
+  "almonds are not a beverage",
+  guessType({ quantity: "200g", categories_tags: ["en:plant-based-foods-and-beverages", "en:nuts", "en:almonds"] }),
+  "solid",
+);
+check(
+  "oat flakes are not a beverage",
+  guessType({ quantity: "500 g", categories_tags: ["en:plant-based-foods-and-beverages", "en:rolled-oats"] }),
+  "solid",
+);
+check(
+  "the vague root alone is not enough",
+  guessType({ categories_tags: ["en:plant-based-foods-and-beverages"] }),
+  "solid",
+);
+
+// The pack's own unit wins over what the tags suggest, because it is the unit
+// the per-100 figures on the label are declared in.
+check(
+  "yoghurt sold in grams is solid",
+  guessType({ quantity: "140g", categories_tags: ["en:cow-milk-yogurts"] }),
+  "solid",
+);
+check(
+  "butter is solid despite the dairy tags",
+  guessType({ quantity: "250 g", categories_tags: ["en:butters", "en:sweet-cream-butters"] }),
+  "solid",
+);
+check(
+  "an oat drink sold by the litre is liquid",
+  guessType({ quantity: "1l", categories_tags: ["en:oat-based-drinks"] }),
+  "liquid",
+);
+// Real entry, quantity "2.5 Lml" — junk, so the tags have to carry it.
+check(
+  "capitalised tags still match",
+  guessType({ quantity: "2.5 Lml", categories_tags: ["en:Soft Drinks"] }),
+  "liquid",
+);
+check(
+  "water with no usable quantity is liquid",
+  guessType({ quantity: "500", categories_tags: ["en:mineral-waters"] }),
+  "liquid",
+);
 
 // --- categories --------------------------------------------------------------
 
@@ -121,6 +174,17 @@ check("olive oil is fats", guessCategory(["en:fats", "en:olive-oils"]), "Fats & 
 check("romanian tags match too", guessCategory(["ro:lactate", "ro:iaurt"]), "Dairy & Eggs");
 check("an unknown tag falls back", guessCategory(["en:snacks"]), "Other");
 check("no tags fall back", guessCategory(undefined), "Other");
+// Live entries carry capitals and locale prefixes on the tag text itself.
+check("capitalised tags still match", guessCategory(["en:Soft Drinks"]), "Beverages");
+check("the groceries catch-all is ignored", guessCategory(["en:ketchup", "en:Groceries"]), "Other");
+check("a sauce under groceries still matches", guessCategory(["en:sauces", "en:Groceries"]), "Fats & Condiments");
+// The same vague root must not make every plant food a beverage here either.
+check(
+  "the vague root does not mean beverage",
+  guessCategory(["en:plant-based-foods-and-beverages", "en:almonds"]),
+  "Nuts & Seeds",
+);
+check("the vague root alone falls back", guessCategory(["en:plant-based-foods-and-beverages"]), "Other");
 // The specific tag should win over the general one it sits under.
 check(
   "the most specific tag wins",
