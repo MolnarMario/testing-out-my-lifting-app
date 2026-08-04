@@ -1,4 +1,4 @@
-import { clampCrop, fitWithin, grayscaleStretch } from "./ocr.ts";
+import { clampCrop, containRect, displayToSource, fitWithin, grayscaleStretch } from "./ocr.ts";
 
 let fails = 0;
 
@@ -63,10 +63,12 @@ check(
   clampCrop({ x: 60, y: 50, width: 500, height: 500 }, 100, 80),
   { x: 60, y: 50, width: 40, height: 30 },
 );
+// Intersection, not translation: a rectangle running off the top-left covers
+// less of the image, rather than the same size slid inside it.
 check(
-  "negative origins are pulled back inside",
+  "an origin off the edge is intersected",
   clampCrop({ x: -20, y: -20, width: 50, height: 40 }, 100, 80),
-  { x: 0, y: 0, width: 50, height: 40 },
+  { x: 0, y: 0, width: 30, height: 20 },
 );
 // A stray tap on the preview should not send tesseract a 3-pixel sliver.
 check(
@@ -77,9 +79,110 @@ check(
 check("fractional bounds are rounded", clampCrop({ x: 9.6, y: 10.4, width: 50.5, height: 40 }, 100, 80), {
   x: 10,
   y: 10,
-  width: 51,
+  width: 50,
   height: 40,
 });
+
+// --- where the image is actually painted --------------------------------------
+// The preview is height-capped, so a portrait photo is letterboxed left and
+// right inside its element rather than filling it.
+
+check("an exact fit has no letterbox", containRect(1000, 500, 400, 200), {
+  x: 0,
+  y: 0,
+  width: 400,
+  height: 200,
+  scale: 0.4,
+});
+// 3:4 portrait in a 4:3 box: bars down the sides.
+check("a portrait photo is letterboxed sideways", containRect(600, 800, 400, 400), {
+  x: 50,
+  y: 0,
+  width: 300,
+  height: 400,
+  scale: 0.5,
+});
+// 2:1 landscape in a square box: bars above and below.
+check("a landscape photo is letterboxed vertically", containRect(800, 400, 400, 400), {
+  x: 0,
+  y: 100,
+  width: 400,
+  height: 200,
+  scale: 0.5,
+});
+check("a degenerate box paints nothing", containRect(600, 800, 0, 400).scale, 0);
+check("a missing image paints nothing", containRect(0, 0, 400, 400).scale, 0);
+
+// --- mapping a drag back onto the photo ---------------------------------------
+
+// No letterbox: a 2x downscale, so displayed pixels double on the way back.
+check(
+  "a drag maps back through the downscale",
+  displayToSource(
+    { left: 100, top: 50, width: 200, height: 100 },
+    { width: 800, height: 400 },
+    { width: 400, height: 200 },
+  ),
+  { x: 200, y: 100, width: 400, height: 200 },
+);
+
+// The bug this function exists for: with 50 px bars down each side, a drag
+// starting at x=50 is on the photo's left edge. Without removing the offset it
+// would map to x=100, putting the crop 100 px into the image.
+check(
+  "the letterbox offset is removed",
+  displayToSource(
+    { left: 50, top: 0, width: 150, height: 400 },
+    { width: 600, height: 800 },
+    { width: 400, height: 400 },
+  ),
+  { x: 0, y: 0, width: 300, height: 800 },
+);
+check(
+  "a crop inside a letterboxed photo maps correctly",
+  displayToSource(
+    { left: 125, top: 100, width: 150, height: 200 },
+    { width: 600, height: 800 },
+    { width: 400, height: 400 },
+  ),
+  { x: 150, y: 200, width: 300, height: 400 },
+);
+
+// A drag that strays into the bars still has to land inside the photo.
+check(
+  "a drag from the letterbox is clamped into the photo",
+  displayToSource(
+    { left: 0, top: 0, width: 200, height: 400 },
+    { width: 600, height: 800 },
+    { width: 400, height: 400 },
+  ),
+  { x: 0, y: 0, width: 300, height: 800 },
+);
+
+// A stray tap is not a crop, and saying so lets the caller label the button.
+check(
+  "a tap-sized drag is not a crop",
+  displayToSource(
+    { left: 100, top: 100, width: 3, height: 3 },
+    { width: 800, height: 400 },
+    { width: 400, height: 200 },
+  ),
+  null,
+);
+check(
+  "a full-frame drag is not a crop either",
+  displayToSource(
+    { left: 0, top: 0, width: 400, height: 200 },
+    { width: 800, height: 400 },
+    { width: 400, height: 200 },
+  ),
+  null,
+);
+check(
+  "an unmeasured box yields nothing",
+  displayToSource({ left: 0, top: 0, width: 10, height: 10 }, { width: 800, height: 400 }, { width: 0, height: 0 }),
+  null,
+);
 
 // --- contrast ----------------------------------------------------------------
 // With four pixels the 2% clip rounds to zero, so the darkest and lightest set

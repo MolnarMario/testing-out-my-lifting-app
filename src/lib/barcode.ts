@@ -121,14 +121,46 @@ export function mapNutriments(nutriments: Nutriments): {
   return { fields, found };
 }
 
-/** Drinks are measured in millilitres; the pantry needs to know which. */
+/**
+ * Roots of the tag tree that describe "edible thing" rather than what something
+ * is. "plant-based-foods-and-beverages" sits above almonds and oat flakes alike,
+ * so reading it as a drink turns half the pantry into liquid.
+ */
+const VAGUE_TAG = /foods?-and-beverages|^\w+:(groceries|a)$/;
+
+const LIQUID_TAG = /\b(beverages?|drinks?|waters?|juices?|sodas?|colas?|milks?|bauturi?)\b/;
+
+/** Tags carry capitals and locale prefixes; everything is matched folded. */
+function usableTags(raw: unknown): string[] {
+  if (!Array.isArray(raw)) return [];
+  return raw
+    .filter((tag): tag is string => typeof tag === "string")
+    .map((tag) => tag.toLowerCase())
+    .filter((tag) => !VAGUE_TAG.test(tag));
+}
+
+/**
+ * Solid or liquid — which decides whether the pantry counts this in grams or
+ * millilitres.
+ *
+ * The pack's declared quantity is the strongest signal available, because it is
+ * the same unit the label's per-100 figures are declared in: yoghurt sold as
+ * "140 g" is measured in grams however drinkable it looks. Tags are only a
+ * fallback for entries with no quantity at all.
+ */
 export function guessType(product: { quantity?: unknown; categories_tags?: unknown }): FoodType {
   const quantity = typeof product.quantity === "string" ? product.quantity.toLowerCase() : "";
-  if (/\d\s*(ml|l|cl)\b/.test(quantity)) return "liquid";
 
-  const tags = Array.isArray(product.categories_tags) ? product.categories_tags : [];
-  const joined = tags.filter((tag): tag is string => typeof tag === "string").join(" ");
-  return /beverage|drink|water|juice|soda|milk|bautur/.test(joined) ? "liquid" : "solid";
+  if (/\d\s*(k?g|grame?)\b/.test(quantity)) return "solid";
+  if (/\d\s*(ml|cl|l|litr[iu]|litre)\b/.test(quantity)) return "liquid";
+
+  // Most specific first, so "mineral-waters" is reached before anything broad.
+  const tags = usableTags(product.categories_tags);
+  for (let i = tags.length - 1; i >= 0; i--) {
+    if (LIQUID_TAG.test(tags[i])) return "liquid";
+  }
+
+  return "solid";
 }
 
 /**
@@ -157,18 +189,15 @@ const CATEGORY_RULES: { pattern: RegExp; cat: FoodCategory }[] = [
   { pattern: /\bfats?\b|\boils?\b|sauce|condiment|spread|butter|ulei|\bsos\b|\bunt\b/, cat: "Fats & Condiments" },
 ];
 
-export function guessCategory(tags: unknown): FoodCategory {
-  if (!Array.isArray(tags)) return "Other";
+export function guessCategory(raw: unknown): FoodCategory {
+  const tags = usableTags(raw);
 
   // Tags run general to specific, so the last one that matches anything is the
   // most precise description of what the product actually is. Testing them one
   // at a time is what makes that true — joined together, the broad tag's words
   // would win whenever its rule happened to be listed first.
   for (let i = tags.length - 1; i >= 0; i--) {
-    const tag = tags[i];
-    if (typeof tag !== "string") continue;
-
-    const rule = CATEGORY_RULES.find((candidate) => candidate.pattern.test(tag));
+    const rule = CATEGORY_RULES.find((candidate) => candidate.pattern.test(tags[i]));
     if (rule !== undefined) return rule.cat;
   }
 

@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from "react";
-import { Camera, ScanLine, X } from "lucide-react";
+import { Barcode, Camera, ScanLine, X } from "lucide-react";
 import { useEscape } from "../../hooks/useEscape";
 import {
   FOOD_CATEGORIES,
@@ -12,8 +12,9 @@ import {
 import type { Food, FoodCategory, FoodType, QtyUnit } from "../../lib/food";
 import { MACRO_KEYS, parseLabel } from "../../lib/label";
 import type { MacroKey } from "../../lib/label";
-import { recognizeLabel, warmUpOcr } from "../../lib/ocr";
+import { displayToSource, recognizeLabel, warmUpOcr } from "../../lib/ocr";
 import type { CropRect, OcrProgress } from "../../lib/ocr";
+import { canDetectBarcodes, macroDrafts, scanBarcode } from "../../lib/barcode";
 
 interface Props {
   pantry: Food[];
@@ -21,7 +22,10 @@ interface Props {
   onClose: () => void;
 }
 
-type Stage = "capture" | "framing" | "working" | "review";
+type Stage = "capture" | "barcode" | "framing" | "working" | "review";
+
+/** Where the numbers in the review form came from, so the user can judge them. */
+type Source = "barcode" | "label";
 
 const MACRO_FIELDS: { key: MacroKey; label: string; unit: string }[] = [
   { key: "kcal", label: "Calories", unit: "kcal" },
@@ -64,6 +68,7 @@ export function ScanModal({ pantry, onSave, onClose }: Props) {
   const [type, setType] = useState<FoodType>("solid");
   const [draft, setDraft] = useState<Draft>(EMPTY_DRAFT);
   const [notes, setNotes] = useState<string[]>([]);
+  const [source, setSource] = useState<Source>("label");
 
   const [qty, setQty] = useState("");
   const [qtyUnit, setQtyUnit] = useState<QtyUnit>("g");
@@ -72,7 +77,21 @@ export function ScanModal({ pantry, onSave, onClose }: Props) {
   const imageRef = useRef<HTMLImageElement>(null);
   const [drag, setDrag] = useState<{ x0: number; y0: number; x1: number; y1: number } | null>(null);
 
+  /**
+   * A barcode lookup waits on the network and a scan waits on the engine, so
+   * either can finish after the user has closed the modal or moved to another
+   * photo. Results are only applied while their token is still the current one.
+   */
+  const runRef = useRef(0);
+
   useEscape(onClose);
+
+  useEffect(() => {
+    return () => {
+      // -1 never matches an issued token, so anything still in flight is dropped.
+      runRef.current = -1;
+    };
+  }, []);
 
   // The engine is ~6 MB on the first scan. Fetching it while the user is still
   // taking the photo hides most of that wait.
@@ -92,7 +111,43 @@ export function ScanModal({ pantry, onSave, onClose }: Props) {
     setPhoto({ file, url: URL.createObjectURL(file) });
     setDrag(null);
     setError("");
-    setStage("framing");
+
+    // A barcode is exact and names the product too, so it is always worth the
+    // second it costs. Everything about it is best-effort: no detector, no
+    // barcode in frame, not in the database, offline — all fall through to
+    // reading the label, which needs no network at all.
+    if (canDetectBarcodes()) {
+      setStage("barcode");
+      void tryBarcode(file, ++runRef.current);
+    } else {
+      setStage("framing");
+    }
+  }
+
+  async function tryBarcode(file: File, token: number) {
+    const product = await scanBarcode(file).catch(() => null);
+    if (runRef.current !== token) return;
+
+    if (product === null) {
+      setStage("framing");
+      return;
+    }
+
+    setDraft(macroDrafts(product));
+    setType(product.type);
+    setCat(product.cat);
+    setName(product.name);
+    setQtyUnit(baseUnitFor(product.type));
+    setSource("barcode");
+
+    const missing = MACRO_KEYS.filter((key) => !product.found[key]);
+    setNotes(
+      missing.length > 0
+        ? [`Open Food Facts had no ${missing.join(", ")} for this product. Add it from the label.`]
+        : [],
+    );
+
+    setStage("review");
   }
 
   const selection: Selection | null =
@@ -117,30 +172,32 @@ export function ScanModal({ pantry, onSave, onClose }: Props) {
   function sourceCrop(): CropRect | null {
     const image = imageRef.current;
     if (image === null || selection === null) return null;
-    if (selection.width < 16 || selection.height < 16) return null;
 
     const box = image.getBoundingClientRect();
-    if (box.width === 0 || box.height === 0) return null;
-
-    const scaleX = image.naturalWidth / box.width;
-    const scaleY = image.naturalHeight / box.height;
-    return {
-      x: selection.left * scaleX,
-      y: selection.top * scaleY,
-      width: selection.width * scaleX,
-      height: selection.height * scaleY,
-    };
+    return displayToSource(
+      selection,
+      { width: image.naturalWidth, height: image.naturalHeight },
+      { width: box.width, height: box.height },
+    );
   }
 
   async function scan(crop: CropRect | null) {
     if (photo === null) return;
 
+    const token = ++runRef.current;
     setStage("working");
     setProgress({ status: "", progress: 0 });
     setError("");
 
     try {
-      const result = await recognizeLabel(photo.file, { crop, onProgress: setProgress });
+      const result = await recognizeLabel(photo.file, {
+        crop,
+        onProgress: (next) => {
+          if (runRef.current === token) setProgress(next);
+        },
+      });
+      if (runRef.current !== token) return;
+
       const parse = parseLabel(result.text);
 
       const next: Draft = { ...EMPTY_DRAFT };
@@ -163,8 +220,10 @@ export function ScanModal({ pantry, onSave, onClose }: Props) {
       ]);
 
       setQtyUnit(baseUnitFor(parse.type));
+      setSource("label");
       setStage("review");
     } catch (cause) {
+      if (runRef.current !== token) return;
       setError(
         cause instanceof Error && cause.message !== ""
           ? cause.message
@@ -212,6 +271,7 @@ export function ScanModal({ pantry, onSave, onClose }: Props) {
               <p className="modal-note">
                 Photograph the nutrition table — the panel with kcal, grăsimi, glucide and
                 proteine. Romanian and English labels both work.
+                {canDetectBarcodes() && " Or photograph the barcode, which is quicker still."}
               </p>
               <label className="scan-drop">
                 <Camera aria-hidden="true" />
@@ -228,6 +288,19 @@ export function ScanModal({ pantry, onSave, onClose }: Props) {
                 />
               </label>
             </>
+          )}
+
+          {stage === "barcode" && (
+            <div className="scan-working">
+              <div className="scan-stage">Looking for a barcode</div>
+              <div className="scan-bar">
+                <div className="scan-fill indeterminate" />
+              </div>
+              <p className="modal-note">
+                If the product is in Open Food Facts this fills everything in at once.
+                Otherwise the label gets read instead.
+              </p>
+            </div>
           )}
 
           {stage === "framing" && photo !== null && (
@@ -303,9 +376,24 @@ export function ScanModal({ pantry, onSave, onClose }: Props) {
           {stage === "review" && (
             <>
               <p className="modal-note">
-                Read off the label, per 100 {type === "liquid" ? "ml" : "g"}. Check them, then
-                name it.
+                {source === "barcode"
+                  ? `From Open Food Facts, per 100 ${type === "liquid" ? "ml" : "g"}. Worth a glance against the pack — the database is crowd-sourced.`
+                  : `Read off the label, per 100 ${type === "liquid" ? "ml" : "g"}. Check them, then name it.`}
               </p>
+
+              <div className="scan-src">
+                {source === "barcode" ? (
+                  <>
+                    <Barcode aria-hidden="true" />
+                    Barcode
+                  </>
+                ) : (
+                  <>
+                    <ScanLine aria-hidden="true" />
+                    Label photo
+                  </>
+                )}
+              </div>
 
               {notes.length > 0 && (
                 <ul className="scan-notes">
@@ -349,7 +437,12 @@ export function ScanModal({ pantry, onSave, onClose }: Props) {
                       <button
                         key={option}
                         className={type === option ? "seg-opt on" : "seg-opt"}
-                        onClick={() => setType(option)}
+                        onClick={() => {
+                          setType(option);
+                          // Otherwise a correction to "liquid" leaves the
+                          // quantity still being entered in grams.
+                          setQtyUnit(baseUnitFor(option));
+                        }}
                       >
                         {option === "solid" ? "g" : "ml"}
                       </button>

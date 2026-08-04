@@ -74,15 +74,79 @@ export function clampCrop(
   const whole = { x: 0, y: 0, width, height };
   if (!crop) return whole;
 
-  const x = Math.max(0, Math.min(Math.round(crop.x), width - 1));
-  const y = Math.max(0, Math.min(Math.round(crop.y), height - 1));
-  const w = Math.max(1, Math.min(Math.round(crop.width), width - x));
-  const h = Math.max(1, Math.min(Math.round(crop.height), height - y));
+  // Intersect with the image rather than sliding the origin inside it: a
+  // rectangle starting past the left edge covers less of the photo, not the
+  // same width shifted right. Rounding the edges rather than the origin and
+  // size separately keeps the result within a pixel of what was asked for.
+  const left = Math.max(0, Math.round(crop.x));
+  const top = Math.max(0, Math.round(crop.y));
+  const right = Math.min(width, Math.round(crop.x + crop.width));
+  const bottom = Math.min(height, Math.round(crop.y + crop.height));
+
+  const w = right - left;
+  const h = bottom - top;
 
   // A stray tap produces a rectangle a few pixels wide; recognising that is
   // worse than ignoring it.
   if (w < 16 || h < 16) return whole;
-  return { x, y, width: w, height: h };
+  return { x: left, y: top, width: w, height: h };
+}
+
+/**
+ * Where an image is actually painted inside its element under `object-fit:
+ * contain`, and by how much it was scaled to get there.
+ *
+ * The preview is capped in height, so a portrait photo — the usual shape for a
+ * phone picture of a label — is letterboxed left and right rather than filling
+ * its box. Treating the element's rectangle as the image would then put a
+ * dragged crop somewhere else entirely.
+ */
+export function containRect(
+  naturalWidth: number,
+  naturalHeight: number,
+  boxWidth: number,
+  boxHeight: number,
+): { x: number; y: number; width: number; height: number; scale: number } {
+  if (naturalWidth <= 0 || naturalHeight <= 0 || boxWidth <= 0 || boxHeight <= 0) {
+    return { x: 0, y: 0, width: 0, height: 0, scale: 0 };
+  }
+
+  const scale = Math.min(boxWidth / naturalWidth, boxHeight / naturalHeight);
+  const width = naturalWidth * scale;
+  const height = naturalHeight * scale;
+
+  return { x: (boxWidth - width) / 2, y: (boxHeight - height) / 2, width, height, scale };
+}
+
+/**
+ * Maps a rectangle drawn on the preview back onto the photo's own pixels, which
+ * is what recognition needs. Returns null when the drag was too small to be
+ * anything but a stray tap.
+ */
+export function displayToSource(
+  selection: { left: number; top: number; width: number; height: number },
+  natural: { width: number; height: number },
+  box: { width: number; height: number },
+): CropRect | null {
+  const painted = containRect(natural.width, natural.height, box.width, box.height);
+  if (painted.scale <= 0) return null;
+
+  const crop = clampCrop(
+    {
+      x: (selection.left - painted.x) / painted.scale,
+      y: (selection.top - painted.y) / painted.scale,
+      width: selection.width / painted.scale,
+      height: selection.height / painted.scale,
+    },
+    natural.width,
+    natural.height,
+  );
+
+  // clampCrop widens a tap-sized rectangle to the whole image; that is the same
+  // as not cropping, and saying so lets the caller label the button honestly.
+  const whole =
+    crop.x === 0 && crop.y === 0 && crop.width === natural.width && crop.height === natural.height;
+  return whole ? null : crop;
 }
 
 /**
