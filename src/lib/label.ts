@@ -114,12 +114,32 @@ function stripBasisNoise(line: string): string {
   return line.replace(/(?:per|la|\/)?\s*\b100\s*(?:g|ml)\b/g, " ");
 }
 
+/** Any unit a nutrition row states its value in. */
+const UNIT = /\b(?:g|mg|ml|kcal|kj)\b/;
+
+/**
+ * Undoes a trailing unit that was read as a digit.
+ *
+ * "6,5 g" comes back as "6,58" and "3,1 g" as "3,18" — a lowercase g against a
+ * printed baseline is the single most common misread on these labels, and when
+ * the space goes with it the unit lands inside the number.
+ *
+ * The tell is that the row then has no unit at all, which a real nutrition row
+ * always does. That keeps a genuine two-decimal value safe: "Sare 0,45 g" keeps
+ * its unit, so nothing is stripped.
+ */
+function repairTrailingUnit(token: string, line: string): string {
+  if (UNIT.test(line)) return token;
+  return /^\d+[.,]\d8$/.test(token) ? token.slice(0, -1) : token;
+}
+
 function numbersIn(line: string): number[] {
   const values: number[] = [];
-  for (const match of stripBasisNoise(line).matchAll(NUMBER_TOKEN)) {
+  const cleaned = stripBasisNoise(line);
+  for (const match of cleaned.matchAll(NUMBER_TOKEN)) {
     const token = match[0];
     if (!/\d/.test(token)) continue;
-    const value = parseNumber(repairDigits(token));
+    const value = parseNumber(repairTrailingUnit(repairDigits(token), cleaned));
     if (value !== null) values.push(value);
   }
   return values;
@@ -158,6 +178,41 @@ function isRowLine(line: string): boolean {
   return ENERGY.test(line) || ROWS.some((row) => row.pattern.test(line));
 }
 
+/**
+ * Terms that mark a nutrition table without naming a row the parser stores:
+ * the units energy is declared in, the sub-rows, and the heading above the lot.
+ *
+ * Sub-rows count here even though parseLabel deliberately skips them — they are
+ * part of the table's shape, so finding them makes the located crop tighter and
+ * the evidence for it stronger.
+ */
+const PANEL_EXTRA: { key: string; pattern: RegExp }[] = [
+  { key: "unit", pattern: /\bkcal\b|\bkj\b/ },
+  { key: "sugars", pattern: /zaharuri|\bsugars?\b/ },
+  { key: "saturates", pattern: /saturat/ },
+  { key: "salt", pattern: /\bsare\b|\bsalt\b|sodiu|sodium/ },
+  { key: "heading", pattern: /nutrition/ },
+];
+
+/**
+ * Which nutrition term a single word is, or null.
+ *
+ * The panel locator uses this to find the table in a photo before reading it.
+ * The vocabulary lives here beside the row patterns rather than being copied
+ * there, so a keyword the parser learns is one the locator can already find.
+ */
+export function panelTerm(word: string): string | null {
+  const text = normalizeText(word).trim();
+  if (text === "") return null;
+  if (ENERGY.test(text)) return "energy";
+
+  const row = ROWS.find((candidate) => candidate.pattern.test(text));
+  if (row !== undefined) return row.key;
+
+  const extra = PANEL_EXTRA.find((candidate) => candidate.pattern.test(text));
+  return extra?.key ?? null;
+}
+
 /** Every row keyword at once, for finding the boundaries between collapsed rows. */
 const ANY_ROW = new RegExp(
   [ENERGY.source, ...ROWS.map((row) => row.pattern.source)].join("|"),
@@ -191,6 +246,28 @@ function collect(line: string, pattern: RegExp): number[] {
     if (value !== null) values.push(value);
   }
   return values;
+}
+
+/**
+ * Finds an energy figure anywhere, ignoring keywords entirely.
+ *
+ * A number carrying kJ or kcal is self-labelling, and OCR routinely breaks the
+ * energy row apart — leaving "186 kJ" on one line and "Valoarea energetică" on
+ * the next, sometimes in that order. Looking only beside or after the keyword
+ * throws the value away.
+ */
+function looseEnergy(lines: string[], column: number): { kcal: number | null; kj: number | null } {
+  let kcal: number | null = null;
+  let kj: number | null = null;
+
+  for (const line of lines) {
+    if (SUBROW_START.test(line)) continue;
+    if (kcal === null) kcal = atColumn(collect(line, KCAL_TOKEN), column);
+    if (kj === null) kj = atColumn(collect(line, KJ_TOKEN), column);
+    if (kcal !== null && kj !== null) break;
+  }
+
+  return { kcal, kj };
 }
 
 /**
@@ -329,6 +406,25 @@ export function parseLabel(raw: string): LabelParse {
         fields[row.key] = value;
         found[row.key] = true;
       }
+    }
+  }
+
+  // Nothing was found beside a keyword, so fall back to a figure that carries
+  // its own unit wherever it landed.
+  //
+  // Holding a kJ figure is no reason to stop looking. OCR routinely breaks the
+  // energy row in two — "Valoarea energetică 1966 kJ /" on one line and
+  // "469 kcal" on the next — and gating this on kj being absent threw the
+  // printed kcal away in exactly that case, quietly reporting a converted number
+  // instead. A kcal printed on the label always beats one derived from kJ, since
+  // deriving it doubles the damage when the kJ token itself was misread.
+  if (!found.kcal) {
+    const loose = looseEnergy(lines, column);
+    if (loose.kcal !== null) {
+      fields.kcal = loose.kcal;
+      found.kcal = true;
+    } else if (loose.kj !== null && kj === null) {
+      kj = loose.kj;
     }
   }
 

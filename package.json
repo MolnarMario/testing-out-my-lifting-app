@@ -7,10 +7,11 @@
     "dev": "vite",
     "build": "tsc && vite build",
     "preview": "vite preview",
-    "test": "node --experimental-strip-types src/lib/plates.test.ts && node --experimental-strip-types src/lib/food.test.ts && node --experimental-strip-types src/lib/stats.test.ts && node --experimental-strip-types src/lib/label.test.ts && node --experimental-strip-types src/lib/ocr.test.ts && node --experimental-strip-types src/lib/barcode.test.ts",
+    "test": "node --experimental-strip-types src/lib/plates.test.ts && node --experimental-strip-types src/lib/food.test.ts && node --experimental-strip-types src/lib/stats.test.ts && node --experimental-strip-types src/lib/label.test.ts && node --experimental-strip-types src/lib/ocr.test.ts && node --experimental-strip-types src/lib/panel.test.ts && node --experimental-strip-types src/lib/barcode.test.ts",
     "fetch-ocr-assets": "node scripts/fetch-ocr-assets.mjs"
   },
   "dependencies": {
+    "@zxing/library": "^0.23.0",
     "lucide-react": "^1.28.0",
     "react": "^19.1.0",
     "react-dom": "^19.1.0",

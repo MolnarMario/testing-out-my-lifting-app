@@ -1,4 +1,13 @@
-import { clampCrop, containRect, displayToSource, fitWithin, grayscaleStretch } from "./ocr.ts";
+import {
+  LOCATE_BAND,
+  READ_BAND,
+  adaptiveThreshold,
+  clampCrop,
+  containRect,
+  displayToSource,
+  fitForOcr,
+  grayscaleStretch,
+} from "./ocr.ts";
 
 let fails = 0;
 
@@ -33,18 +42,66 @@ function levelsOf(pixels: Uint8ClampedArray): number[] {
 
 // --- downscaling -------------------------------------------------------------
 
-check("landscape photo fits the long edge", fitWithin(3000, 2000, 1600), {
+check("landscape photo fits the long edge", fitForOcr(3000, 2000, 1600, 800), {
   width: 1600,
   height: 1067,
 });
-check("portrait photo fits the long edge", fitWithin(2000, 3000, 1600), {
+check("portrait photo fits the long edge", fitForOcr(2000, 3000, 1600, 800), {
   width: 1067,
   height: 1600,
 });
-check("small images are never upscaled", fitWithin(800, 600, 1600), { width: 800, height: 600 });
-check("exact fit is left alone", fitWithin(1600, 900, 1600), { width: 1600, height: 900 });
-check("extreme aspect keeps a pixel", fitWithin(4000, 100, 1600), { width: 1600, height: 40 });
-check("never collapses to zero", fitWithin(4000, 1, 1600), { width: 1600, height: 1 });
+check("an image already in the band is left alone", fitForOcr(1000, 750, 1600, 800), {
+  width: 1000,
+  height: 750,
+});
+check("exact fit is left alone", fitForOcr(1600, 900, 1600, 800), { width: 1600, height: 900 });
+check("extreme aspect keeps a pixel", fitForOcr(4000, 100, 1600, 800), { width: 1600, height: 40 });
+check("never collapses to zero", fitForOcr(4000, 1, 1600, 800), { width: 1600, height: 1 });
+check("a degenerate size does not divide by zero", fitForOcr(0, 0, 1600, 800), {
+  width: 1,
+  height: 1,
+});
+
+// The bug behind a label whose decimal commas went missing: a tight crop was
+// left at whatever size it was captured, and small text loses its punctuation
+// first. Undersized crops are now scaled up into the band.
+check("a small crop is scaled up", fitForOcr(400, 300, 1600, 800), { width: 800, height: 600 });
+check("a very small crop is not blown up without limit", fitForOcr(100, 80, 1600, 800), {
+  width: 300,
+  height: 240,
+});
+check("the default band upscales a typical crop", fitForOcr(700, 500), { width: 1400, height: 1000 });
+check("the default band shrinks a phone photo", fitForOcr(4000, 3000), { width: 2600, height: 1950 });
+
+// --- the two passes ----------------------------------------------------------
+// Reading a whole 12 MP frame at 2600 px left the nutrition table's text around
+// 21 px tall, under the ~30 px tesseract needs — which is why scanning an
+// uncropped photo failed. The locating pass may be small because its text is
+// thrown away; the pass whose numbers are kept must not be.
+
+check(
+  "the locating pass stays cheap",
+  fitForOcr(4032, 3024, LOCATE_BAND.maxEdge, LOCATE_BAND.minEdge),
+  { width: 2400, height: 1800 },
+);
+
+// A panel cropped out of a 12 MP photo, roughly a quarter of the frame across.
+const panelCrop = fitForOcr(1100, 850, READ_BAND.maxEdge, READ_BAND.minEdge);
+check("a located panel is read at full size", panelCrop, { width: 1800, height: 1391 });
+
+/** Cap height of a nutrition row, as a fraction of the region it sits in. */
+function capHeight(region: { height: number }, fraction: number): number {
+  return Math.round(region.height * fraction);
+}
+
+// In the whole frame the table's rows are ~1.1% of the height; once cropped to
+// the panel they are ~8% of it. That difference is the fix.
+check(
+  "whole-frame rows land under what tesseract needs",
+  capHeight(fitForOcr(4032, 3024), 0.011) < 30,
+  true,
+);
+check("a cropped panel's rows clear it comfortably", capHeight(panelCrop, 0.08) >= 30, true);
 
 // --- cropping ----------------------------------------------------------------
 
@@ -185,16 +242,26 @@ check(
 );
 
 // --- contrast ----------------------------------------------------------------
-// With four pixels the 2% clip rounds to zero, so the darkest and lightest set
-// the ends directly: 50..200 is rescaled onto 0..255.
+// At least one pixel is clipped from each end whatever the size, so these need
+// more than a handful: with four pixels the clip would be half the image, and
+// there is genuinely no way to tell an outlier from signal in four samples.
+// A hundred of each level puts the ends well clear of the clip.
 
-const stretched = greys([50, 100, 150, 200]);
+const stretched = greys([50, 100, 150, 200].flatMap((level) => Array<number>(100).fill(level)));
 grayscaleStretch(stretched);
-check("mid-tones are stretched across the range", levelsOf(stretched), [0, 85, 170, 255]);
+const stretchedLevels = levelsOf(stretched);
+check(
+  "mid-tones are stretched across the range",
+  [stretchedLevels[0], stretchedLevels[100], stretchedLevels[200], stretchedLevels[300]],
+  [0, 85, 170, 255],
+);
 
-const colour = new Uint8ClampedArray([255, 0, 0, 255, 0, 0, 255, 255]);
+const colour = new Uint8ClampedArray([
+  255, 0, 0, 255, 255, 0, 0, 255, // two red pixels, luma 76
+  0, 0, 255, 255, 0, 0, 255, 255, // two blue, luma 29
+]);
 grayscaleStretch(colour);
-check("colour collapses to grey", levelsOf(colour), [255, 0]);
+check("colour collapses to grey", levelsOf(colour), [255, 255, 0, 0]);
 check("alpha is forced opaque", colour[3], 255);
 check(
   "channels end up equal",
@@ -226,11 +293,117 @@ check("the darkest mid-tone bottoms out", glareLevels[0], 0);
 check("the brightest mid-tone reaches the top", glareLevels[48], 255);
 check("the blown highlight clamps rather than setting the scale", glareLevels[49], 255);
 
+// The bug that made scanning fail almost every time. Ink is a small minority of
+// a label photo, so a clip sized like the ink itself eats the text: the low end
+// of the stretch lands in the paper instead of the letters, and what gets
+// amplified across the full range is paper noise. Measured on a real frame this
+// took a page tesseract read at 110 words down to 22 words of nonsense.
+//
+// 1000 pixels of paper around 235, twenty of ink around 25 — 2% ink, which is
+// typical. The window must still open on the ink.
+const sparse = greys([
+  ...Array<number>(1000).fill(0).map((_, i) => 233 + (i % 5)),
+  ...Array<number>(20).fill(0).map((_, i) => 24 + (i % 3)),
+]);
+grayscaleStretch(sparse);
+const sparseLevels = levelsOf(sparse);
+
+check("sparse ink still reaches black", sparseLevels[1000], 0);
+check("and the paper still reaches white", sparseLevels[999] > 200, true);
+// The failure mode: paper varying by 4 levels blown apart into hundreds.
+check(
+  "paper stays paper rather than becoming texture",
+  Math.max(...sparseLevels.slice(0, 1000)) - Math.min(...sparseLevels.slice(0, 1000)) < 30,
+  true,
+);
+
 // The flip side: a frame that is genuinely one tone plus a speck of glare has no
 // range to recover, and is left as it is rather than driven to black.
 const speck = greys([...Array<number>(49).fill(60), 255]);
 grayscaleStretch(speck);
 check("a uniform frame with a speck of glare is left alone", levelsOf(speck)[0], 60);
+
+// --- adaptive threshold -------------------------------------------------------
+// The point of this is text that survives uneven lighting. A photograph of a
+// package always has a bright side and a shadowed side, and one cut-off across
+// the whole frame loses whichever end falls the wrong side of it.
+
+/** Paper running bright on the left to deep shadow on the right, with dark ink on it. */
+function litPage(width: number, height: number, inkAt: (x: number, y: number) => boolean) {
+  const pixels = new Uint8ClampedArray(width * height * 4);
+  for (let y = 0; y < height; y++) {
+    for (let x = 0; x < width; x++) {
+      const paper = 235 - Math.round((x / (width - 1)) * 175); // 235 -> 60
+      const value = inkAt(x, y) ? Math.round(paper * 0.25) : paper;
+      const p = (y * width + x) * 4;
+      pixels[p] = value;
+      pixels[p + 1] = value;
+      pixels[p + 2] = value;
+      pixels[p + 3] = 255;
+    }
+  }
+  return pixels;
+}
+
+const W = 96;
+const H = 48;
+// Vertical strokes every 8th column, away from the edges.
+const isInk = (x: number, y: number) => x % 8 === 0 && x > 4 && x < W - 5 && y > 4 && y < H - 5;
+
+const lit = litPage(W, H, isInk);
+adaptiveThreshold(lit, W, H);
+
+let inkKept = 0;
+let inkLost = 0;
+let paperKept = 0;
+let paperLost = 0;
+for (let y = 0; y < H; y++) {
+  for (let x = 0; x < W; x++) {
+    const value = lit[(y * W + x) * 4];
+    if (isInk(x, y)) {
+      if (value === 0) inkKept++;
+      else inkLost++;
+    } else {
+      if (value === 255) paperKept++;
+      else paperLost++;
+    }
+  }
+}
+
+check("every stroke survives the gradient", inkLost, 0);
+check("ink is black", inkKept > 0, true);
+check("paper stays white", paperLost, 0);
+check("paper is white", paperKept > 0, true);
+
+// The shadowed end is the half a global threshold gives up on: ink there is
+// brighter than paper at the lit end, so no single cut-off can separate both.
+const darkEndInk = lit[((H >> 1) * W + 88) * 4];
+const lightEndPaper = lit[((H >> 1) * W + 3) * 4];
+check("ink in deep shadow is still ink", darkEndInk, 0);
+check("paper in bright light is still paper", lightEndPaper, 255);
+
+// Output must be strictly bilevel — tesseract should have no thresholding left.
+const levels = new Set<number>();
+for (let p = 0; p < lit.length; p += 4) levels.add(lit[p]);
+check("the result is bilevel", [...levels].sort((a, b) => a - b), [0, 255]);
+
+// Blank paper has no ink to find and must not dissolve into speckle, which
+// tesseract would then try to read.
+//
+// The width matters: this ramp drops 175 levels across the frame, so at 96 px
+// that is 1.8 levels/px — already ~25x steeper than a real photo, where the
+// lighting varies across thousands of pixels (~0.07 levels/px at 2600 px wide).
+// Squeezed into a narrow frame the same ramp becomes a genuine edge, and
+// finding an edge there is correct rather than a bug.
+const blank = litPage(W, H, () => false);
+adaptiveThreshold(blank, W, H);
+check("blank paper under uneven light stays blank", [...new Set([...blank.filter((_, i) => i % 4 === 0)])], [255]);
+
+check("a zero-size frame is ignored", (() => {
+  const empty = new Uint8ClampedArray(0);
+  adaptiveThreshold(empty, 0, 0);
+  return empty.length;
+})(), 0);
 
 console.log(fails === 0 ? "\nALL PASS" : `\n${fails} FAILURES`);
 // Throwing (rather than setting process.exitCode) fails the run without pulling

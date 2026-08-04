@@ -14,7 +14,7 @@ import { MACRO_KEYS, parseLabel } from "../../lib/label";
 import type { MacroKey } from "../../lib/label";
 import { displayToSource, recognizeLabel, warmUpOcr } from "../../lib/ocr";
 import type { CropRect, OcrProgress } from "../../lib/ocr";
-import { canDetectBarcodes, macroDrafts, scanBarcode } from "../../lib/barcode";
+import { macroDrafts, scanBarcode } from "../../lib/barcode";
 
 interface Props {
   pantry: Food[];
@@ -43,10 +43,14 @@ const EMPTY_DRAFT: Draft = { kcal: "", protein: "", carbs: "", fat: "", fiber: "
 const LOW_CONFIDENCE = 60;
 
 /** Tesseract's stage names are internal; these are what the user is actually waiting on. */
-function describe(status: string): string {
+function describe({ status, phase }: OcrProgress): string {
   if (status.includes("core") || status.includes("initializ")) return "Starting the engine";
   if (status.includes("lang") || status.includes("traineddata")) return "Loading Romanian + English";
-  if (status.includes("recogniz")) return "Reading the label";
+  // Recognition runs twice, so the bar fills twice. Naming the passes is what
+  // keeps that reading as progress rather than as a stall and a restart.
+  if (status.includes("recogniz")) {
+    return phase === "locating" ? "Finding the nutrition table" : "Reading the label";
+  }
   return "Preparing";
 }
 
@@ -60,7 +64,7 @@ interface Selection {
 export function ScanModal({ pantry, onSave, onClose }: Props) {
   const [stage, setStage] = useState<Stage>("capture");
   const [photo, setPhoto] = useState<{ file: File; url: string } | null>(null);
-  const [progress, setProgress] = useState<OcrProgress>({ status: "", progress: 0 });
+  const [progress, setProgress] = useState<OcrProgress>({ status: "", progress: 0, phase: "locating" });
   const [error, setError] = useState("");
 
   const [name, setName] = useState("");
@@ -69,6 +73,8 @@ export function ScanModal({ pantry, onSave, onClose }: Props) {
   const [draft, setDraft] = useState<Draft>(EMPTY_DRAFT);
   const [notes, setNotes] = useState<string[]>([]);
   const [source, setSource] = useState<Source>("label");
+  /** What the engine actually read. The only way to tell a bad photo from a bad parse. */
+  const [rawText, setRawText] = useState("");
 
   const [qty, setQty] = useState("");
   const [qtyUnit, setQtyUnit] = useState<QtyUnit>("g");
@@ -113,15 +119,12 @@ export function ScanModal({ pantry, onSave, onClose }: Props) {
     setError("");
 
     // A barcode is exact and names the product too, so it is always worth the
-    // second it costs. Everything about it is best-effort: no detector, no
+    // second it costs — and with ZXing behind the platform detector, every
+    // browser gets the attempt. Everything about it stays best-effort: no
     // barcode in frame, not in the database, offline — all fall through to
     // reading the label, which needs no network at all.
-    if (canDetectBarcodes()) {
-      setStage("barcode");
-      void tryBarcode(file, ++runRef.current);
-    } else {
-      setStage("framing");
-    }
+    setStage("barcode");
+    void tryBarcode(file, ++runRef.current);
   }
 
   async function tryBarcode(file: File, token: number) {
@@ -186,7 +189,7 @@ export function ScanModal({ pantry, onSave, onClose }: Props) {
 
     const token = ++runRef.current;
     setStage("working");
-    setProgress({ status: "", progress: 0 });
+    setProgress({ status: "", progress: 0, phase: "locating" });
     setError("");
 
     try {
@@ -220,6 +223,7 @@ export function ScanModal({ pantry, onSave, onClose }: Props) {
       ]);
 
       setQtyUnit(baseUnitFor(parse.type));
+      setRawText(parse.rawText);
       setSource("label");
       setStage("review");
     } catch (cause) {
@@ -270,8 +274,8 @@ export function ScanModal({ pantry, onSave, onClose }: Props) {
             <>
               <p className="modal-note">
                 Photograph the nutrition table — the panel with kcal, grăsimi, glucide and
-                proteine. Romanian and English labels both work.
-                {canDetectBarcodes() && " Or photograph the barcode, which is quicker still."}
+                proteine. Romanian and English labels both work. Or photograph the barcode,
+                which is quicker still.
               </p>
               <label className="scan-drop">
                 <Camera aria-hidden="true" />
@@ -306,8 +310,9 @@ export function ScanModal({ pantry, onSave, onClose }: Props) {
           {stage === "framing" && photo !== null && (
             <>
               <p className="modal-note">
-                Drag a box around just the nutrition table. That one step does more for
-                accuracy than anything else — or scan the whole photo.
+                Scan it as it is — the nutrition table gets found and zoomed into
+                automatically. If that misses, drag a box around just the table and scan
+                again.
               </p>
 
               <div
@@ -351,7 +356,7 @@ export function ScanModal({ pantry, onSave, onClose }: Props) {
                 )}
                 <button className="btn btn-primary" onClick={() => void scan(sourceCrop())}>
                   <ScanLine aria-hidden="true" />
-                  {sourceCrop() === null ? "Scan whole photo" : "Scan selection"}
+                  {sourceCrop() === null ? "Find the table and scan" : "Scan selection"}
                 </button>
               </div>
             </>
@@ -359,7 +364,7 @@ export function ScanModal({ pantry, onSave, onClose }: Props) {
 
           {stage === "working" && (
             <div className="scan-working">
-              <div className="scan-stage">{describe(progress.status)}</div>
+              <div className="scan-stage">{describe(progress)}</div>
               <div className="scan-bar">
                 <div
                   className="scan-fill"
@@ -516,6 +521,18 @@ export function ScanModal({ pantry, onSave, onClose }: Props) {
               </div>
 
               {error !== "" && <p className="hint">{error}</p>}
+
+              {source === "label" && rawText.trim() !== "" && (
+                <details className="scan-raw">
+                  <summary>What the scan read</summary>
+                  <pre>{rawText}</pre>
+                  <p className="modal-note">
+                    Numbers wrong here rather than above means the photo was the problem, not
+                    the parsing — usually too far away, so the decimal commas are lost. Fill
+                    more of the frame with the table, or drag a box around it.
+                  </p>
+                </details>
+              )}
             </>
           )}
         </div>

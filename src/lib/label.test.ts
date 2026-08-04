@@ -184,6 +184,32 @@ Proteine 8,5 g
 check("kcal derived from kj", macros(kjOnly), [262.91, 8.5, 45, 5, 2]);
 check("derivation is reported", parseLabel(kjOnly).warnings.length, 1);
 
+// A printed kcal always beats a derived one. OCR often breaks the energy row so
+// the two halves land on separate lines; reading only the kJ side and converting
+// it hides a misread kJ token behind a number that still looks plausible.
+const splitEnergy = `
+Valoarea energetica 1966 kJ /
+469 kcal
+Grasimi 24,3 g
+Glucide 54,6 g
+Proteine 6,5 g
+`;
+
+check("the printed kcal wins over the kj beside it", macros(splitEnergy), [469, 6.5, 54.6, 24.3, 0]);
+check("and nothing is reported as derived", parseLabel(splitEnergy).warnings, []);
+
+// --- the unit read as a digit ------------------------------------------------
+// A lowercase g against the baseline is the commonest misread on these labels,
+// and when the space goes with it the unit lands inside the number: "6,5 g"
+// comes back as "6,58". Measured on a real scan, this was the only thing left
+// wrong once the table was being found and read at size.
+
+check("a trailing g read as 8 is dropped", macros("Proteine 6,58\nFibre 3,18"), [0, 6.5, 0, 0, 3.1]);
+// The row having no unit is the whole tell, so a row that kept one is untouched.
+check("a real two-decimal value with its unit survives", macros("Grasimi 0,58 g"), [0, 0, 0, 0.58, 0]);
+check("and a separate stray 8 was never the problem", macros("Grasimi 24,3 8"), [0, 0, 0, 24.3, 0]);
+check("one decimal place is left alone", macros("Grasimi 24,8"), [0, 0, 0, 24.8, 0]);
+
 // --- liquid ------------------------------------------------------------------
 
 const liquid = `
@@ -226,6 +252,45 @@ check(
   macros("Grasimi 24,5 g din care saturate 11,2 g Glucide 54,3 g din care zaharuri 23,1 g"),
   [0, 0, 54.3, 24.5, 0],
 );
+
+// --- a real degraded scan ----------------------------------------------------
+// Verbatim tesseract output from a photograph of a whole Romanian back panel.
+// The engine broke the energy row in half and put the value on the line *before*
+// its label, so looking only forward from the keyword lost it entirely.
+
+const degraded = `Dedig;atia nutritionala
+Valori medii pentru 100 g
+ci                      186 kJ
+Valoarea energetică            ,
+Grăsimi                                   0,69
+- din care acizi grași saturați           <0,1g
+Glucide                                              469                     -
+- din care zaharuri                              0,79
+CEE NYY,
+:           "Conţinutul de sare se datorează exclusiv
+prezenţei în mod natural a sodiului.
+Ambalat in România
+Distribuit în      a      i
+our România SA
+Saniora, nr, pr Green                   - 1
+AT soc a Clădirea`;
+
+// 186 kJ is self-labelling, so it is usable even though its keyword ended up on
+// the following line: 186 / 4.184.
+check("a split energy row is still read", parseLabel(degraded).fields.kcal, 44.46);
+check("and is reported as derived", parseLabel(degraded).found.kcal, true);
+
+// The sub-rows are still kept out, even this badly mangled.
+check("saturates do not become fat", parseLabel(degraded).fields.fat, 0.69);
+check("sugars do not become carbs", parseLabel(degraded).fields.carbs, 469);
+// "Proteine" was destroyed past recognition; a blank is correct, zero is not.
+check("an unreadable row stays unread", parseLabel(degraded).found.protein, false);
+
+// The carbs figure is a misread and must be called out rather than recorded
+// quietly — the label's " g" was read as a 9 and the comma lost.
+const degradedWarnings = parseLabel(degraded).warnings;
+check("the impossible carbs value is flagged", degradedWarnings.some((w) => w.includes("100 g")), true);
+check("the calorie mismatch is flagged", degradedWarnings.some((w) => w.includes("do not add up")), true);
 
 // --- validation catches numbers that do not add up ---------------------------
 
