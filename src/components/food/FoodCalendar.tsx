@@ -83,6 +83,7 @@ export function FoodCalendar({ days, goals, unit, initialDate, onPick, onClose }
           </div>
 
           <div className="month-scroll">
+            <div className="cal-inner">
             <div className="mc-cal-dows">
               {WEEKDAYS.map((w) => (
                 <span key={w}>{w}</span>
@@ -174,6 +175,7 @@ export function FoodCalendar({ days, goals, unit, initialDate, onPick, onClose }
                   </button>
                 );
               })}
+            </div>
             </div>
           </div>
 

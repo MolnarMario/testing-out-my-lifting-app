@@ -95,6 +95,14 @@ export function SetLogger({
       ? fromKg(relevantMax, unit) * (intensityNum / 100)
       : null;
 
+  // Asking for a percentage of a known max is asking for that weight, so fill it
+  // in. Typing over the weight afterwards still wins — this only drives the
+  // field while the percentage is the thing being changed.
+  useEffect(() => {
+    if (impliedWeight === null) return;
+    setWeight(String(Math.round(impliedWeight * 100) / 100));
+  }, [impliedWeight]);
+
   function reset() {
     setWeight("");
     setReps("");
@@ -352,6 +360,7 @@ export function SetLogger({
           <span className="dot" />
           Log sets
         </div>
+        {impliedWeight !== null && <span className="auto-note">Auto from 1RM</span>}
       </div>
 
       {body}

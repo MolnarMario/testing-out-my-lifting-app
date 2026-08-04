@@ -1,6 +1,8 @@
 import { useState } from "react";
-import { Beef, Droplet, Flame, Scale } from "lucide-react";
+import { Beef, Droplet, Flame, Scale, Zap } from "lucide-react";
 import {
+  CAN_KCAL,
+  CAN_ML,
   FOOD_CATEGORIES,
   baseUnitFor,
   fromBaseQty,
@@ -50,7 +52,10 @@ export function TodayPane({
   const [shake, setShake] = useState(0);
   const [lastAdded, setLastAdded] = useState<string | null>(null);
 
-  const totals = totalsFor(day.entries);
+  const logged = totalsFor(day.entries);
+  // Cans are tracked as a tap-count, but their calories are still calories.
+  const canKcal = day.cans * CAN_KCAL;
+  const totals = { ...logged, kcal: logged.kcal + canKcal };
   const selected = pantry.find((f) => f.id === foodId) ?? null;
 
   const kcalGoal = goals.kcal ?? 0;
@@ -266,6 +271,49 @@ export function TodayPane({
               onClick={() => onUpdateDay((d) => ({ ...d, water: d.water + 500 }))}
             >
               +500
+            </button>
+          </div>
+        </div>
+
+        <div className="card tight mc-tcard">
+          <div className="mc-th">
+            <span className="mc-tl">
+              <Zap className="mc-gi" aria-hidden="true" />
+              White Monster
+            </span>
+            {day.cans > 0 && <span className="mc-goalnote">{canKcal} kcal</span>}
+          </div>
+
+          <div className="mc-tval">
+            {day.cans}
+            <span className="mc-tu">{day.cans === 1 ? "can" : "cans"}</span>
+          </div>
+
+          <div className="mc-tsub">
+            {day.cans > 0 ? (
+              <>
+                <b>{day.cans * CAN_ML} ml</b> counted toward water
+              </>
+            ) : (
+              `${CAN_ML} ml a can`
+            )}
+          </div>
+
+          <div className="mc-tbtns">
+            <button
+              className="mc-stepb minus"
+              aria-label="One fewer can"
+              disabled={day.cans <= 0}
+              onClick={() => onUpdateDay((d) => ({ ...d, cans: Math.max(0, d.cans - 1) }))}
+            >
+              −
+            </button>
+            <button
+              className="mc-stepb lg"
+              aria-label="One more can"
+              onClick={() => onUpdateDay((d) => ({ ...d, cans: d.cans + 1 }))}
+            >
+              +1
             </button>
           </div>
         </div>

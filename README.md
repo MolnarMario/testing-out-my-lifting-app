@@ -29,10 +29,9 @@ The plate icon on any logged set sends that weight straight to the loader.
 The workout calendar has a **+ Food** toggle that overlays each day's calories,
 macro split, water and bodyweight onto the training grid.
 
-Parity is tracked by diffing every class in `base.css` against the source: 23
-remain unreferenced, and 17 of those were already dead in the original build.
-The genuine remainder is cosmetic — `auto-note`, `badge`, `cal-inner`, `lg`,
-`mc-presetbtn`, `mc-ub`.
+Parity is tracked by diffing every class in `base.css` against the source. 17
+classes remain unreferenced and **all 17 were already dead in the original
+build** — every style the original actually used is now driven by this code.
 
 **The rewrite does not read data saved by the legacy build.** The storage shapes are
 different and no migration is provided, so the two are effectively separate apps.

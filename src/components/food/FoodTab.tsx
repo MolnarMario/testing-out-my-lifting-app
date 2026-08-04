@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useMemo, useState } from "react";
 import { TodayPane } from "./TodayPane";
 import { PantryPane } from "./PantryPane";
 import { GoalsPane } from "./GoalsPane";
@@ -24,6 +24,15 @@ export function FoodTab({ unit }: Props) {
   const [date, setDate] = useState(todayKey());
   const [calendarOpen, setCalendarOpen] = useState(false);
   const { state, pantry, getDay, updateDay, setGoals, addFood, removeFood } = useFood();
+
+  // Per-kg targets need a weight; the most recent one on or before today is the
+  // best guess, since bodyweight is not logged every day.
+  const latestBodyweight = useMemo(() => {
+    const dated = Object.entries(state.days)
+      .filter(([, d]) => d.bw !== null)
+      .sort(([a], [b]) => b.localeCompare(a));
+    return dated.length > 0 ? dated[0][1].bw : null;
+  }, [state.days]);
 
   return (
     <div className="mc">
@@ -74,7 +83,14 @@ export function FoodTab({ unit }: Props) {
 
       {pane === "pantry" && <PantryPane pantry={pantry} onAdd={addFood} onRemove={removeFood} />}
 
-      {pane === "goals" && <GoalsPane goals={state.goal} onChange={setGoals} />}
+      {pane === "goals" && (
+        <GoalsPane
+          goals={state.goal}
+          onChange={setGoals}
+          unit={unit}
+          bodyweight={latestBodyweight}
+        />
+      )}
     </div>
   );
 }

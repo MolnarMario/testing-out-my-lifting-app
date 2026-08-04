@@ -57,7 +57,13 @@ export interface FoodDay {
   water: number;
   /** Kilograms, canonical like the rest of the app. */
   bw: number | null;
+  /** Cans of energy drink, counted separately so it is one tap not a food entry. */
+  cans: number;
 }
+
+/** A 500 ml White Monster, per the original. Calories fold into the day. */
+export const CAN_KCAL = 10;
+export const CAN_ML = 500;
 
 export interface FoodGoals {
   kcal: number | null;
@@ -81,7 +87,7 @@ export const GRAMS_PER_OZ = 28.3495;
 export const ML_PER_FLOZ = 29.5735;
 
 export function emptyFoodDay(): FoodDay {
-  return { entries: [], water: 0, bw: null };
+  return { entries: [], water: 0, bw: null, cans: 0 };
 }
 
 export function emptyGoals(): FoodGoals {

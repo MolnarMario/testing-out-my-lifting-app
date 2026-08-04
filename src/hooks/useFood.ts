@@ -15,6 +15,7 @@ function normalizeDay(raw: unknown): FoodDay {
     entries: Array.isArray(d.entries) ? d.entries : [],
     water: typeof d.water === "number" && Number.isFinite(d.water) ? d.water : 0,
     bw: typeof d.bw === "number" && Number.isFinite(d.bw) ? d.bw : null,
+    cans: typeof d.cans === "number" && Number.isFinite(d.cans) ? d.cans : 0,
   };
 }
 

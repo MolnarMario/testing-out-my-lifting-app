@@ -21,6 +21,9 @@ const FLAGS = [
 
 type FlagKey = (typeof FLAGS)[number]["key"];
 
+/** The three lifts the 1RM modal stores, and that percentage intensity reads. */
+const TRACKED_FOR_1RM = new Set(["def-squat", "def-bench-press", "def-deadlift"]);
+
 export function ExercisesPane({
   library,
   hiddenCount,
@@ -152,6 +155,7 @@ export function ExercisesPane({
               {items.map((ex) => (
                 <div className="ex-chip" key={ex.id}>
                   <span className="nm">{ex.name}</span>
+                  {TRACKED_FOR_1RM.has(ex.id) && <span className="badge">1RM</span>}
                   {ex.isCustom && <span className="custom-tag">custom</span>}
                   <button
                     className="del"
