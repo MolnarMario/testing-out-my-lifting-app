@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { Beef, Droplet, Flame, Scale, Zap } from "lucide-react";
+import { Beef, Droplet, Flame, Scale, ScanLine, Zap } from "lucide-react";
 import {
   CAN_KCAL,
   CAN_ML,
@@ -26,6 +26,7 @@ interface Props {
   onUpdateDay: (patch: (day: FoodDay) => FoodDay) => void;
   onOpenGoals: () => void;
   onOpenCalendar: () => void;
+  onOpenScan: () => void;
 }
 
 const MACROS = [
@@ -45,6 +46,7 @@ export function TodayPane({
   onUpdateDay,
   onOpenGoals,
   onOpenCalendar,
+  onOpenScan,
 }: Props) {
   const [foodId, setFoodId] = useState("");
   const [qty, setQty] = useState("");
@@ -446,6 +448,18 @@ export function TodayPane({
       </div>
 
       <div className="mc-addbar">
+        {/* Eating something that is not in the pantry yet is exactly when the
+            scanner is wanted, so it lives where that is noticed. */}
+        <button
+          type="button"
+          className="mc-scan"
+          onClick={onOpenScan}
+          title="Scan a food label"
+          aria-label="Scan a food label"
+        >
+          <ScanLine aria-hidden="true" />
+        </button>
+
         <div className={invalidFood ? "mc-sel invalid" : "mc-sel"} key={`s${shake}`}>
           <select
             value={foodId}

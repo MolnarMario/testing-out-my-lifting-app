@@ -3,18 +3,21 @@ import { TodayPane } from "./TodayPane";
 import { PantryPane } from "./PantryPane";
 import { GoalsPane } from "./GoalsPane";
 import { FoodCalendar } from "./FoodCalendar";
+import { TrendsPane } from "./TrendsPane";
+import { ScanModal } from "./ScanModal";
 import { useFood } from "../../hooks/useFood";
-import { todayKey } from "../../lib/format";
+import { todayKey, uid } from "../../lib/format";
 import type { Unit } from "../../lib/types";
 
 interface Props {
   unit: Unit;
 }
 
-type Pane = "today" | "pantry" | "goals";
+type Pane = "today" | "trends" | "pantry" | "goals";
 
 const PANES: { key: Pane; label: string }[] = [
   { key: "today", label: "Today" },
+  { key: "trends", label: "Trends" },
   { key: "pantry", label: "Pantry" },
   { key: "goals", label: "Goals" },
 ];
@@ -23,6 +26,7 @@ export function FoodTab({ unit }: Props) {
   const [pane, setPane] = useState<Pane>("today");
   const [date, setDate] = useState(todayKey());
   const [calendarOpen, setCalendarOpen] = useState(false);
+  const [scanOpen, setScanOpen] = useState(false);
   const { state, pantry, getDay, updateDay, setGoals, addFood, removeFood } = useFood();
 
   // Per-kg targets need a weight; the most recent one on or before today is the
@@ -64,6 +68,41 @@ export function FoodTab({ unit }: Props) {
           onUpdateDay={(patch) => updateDay(date, patch)}
           onOpenGoals={() => setPane("goals")}
           onOpenCalendar={() => setCalendarOpen(true)}
+          onOpenScan={() => setScanOpen(true)}
+        />
+      )}
+
+      {scanOpen && (
+        <ScanModal
+          pantry={pantry}
+          onClose={() => setScanOpen(false)}
+          onSave={(food, log) => {
+            addFood(food);
+            // A scanned food is worth keeping either way; logging it to the day
+            // is what makes the scan a one-step action rather than two.
+            if (log !== null) {
+              updateDay(date, (day) => ({
+                ...day,
+                entries: [
+                  ...day.entries,
+                  {
+                    id: uid(),
+                    foodId: food.id,
+                    name: food.name,
+                    type: food.type,
+                    qty: log.qty,
+                    unit: log.unit,
+                    kcal: food.kcal,
+                    fat: food.fat,
+                    carbs: food.carbs,
+                    fiber: food.fiber,
+                    protein: food.protein,
+                  },
+                ],
+              }));
+            }
+            setScanOpen(false);
+          }}
         />
       )}
 
@@ -81,7 +120,27 @@ export function FoodTab({ unit }: Props) {
         />
       )}
 
-      {pane === "pantry" && <PantryPane pantry={pantry} onAdd={addFood} onRemove={removeFood} />}
+      {pane === "trends" && (
+        <TrendsPane
+          days={state.days}
+          goals={state.goal}
+          unit={unit}
+          onOpenDay={(next) => {
+            setDate(next);
+            setPane("today");
+          }}
+          onOpenGoals={() => setPane("goals")}
+        />
+      )}
+
+      {pane === "pantry" && (
+        <PantryPane
+          pantry={pantry}
+          onAdd={addFood}
+          onRemove={removeFood}
+          onOpenScan={() => setScanOpen(true)}
+        />
+      )}
 
       {pane === "goals" && (
         <GoalsPane

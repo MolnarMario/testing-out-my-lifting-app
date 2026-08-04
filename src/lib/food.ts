@@ -155,6 +155,60 @@ export function num(value: number): string {
   return Number(value.toFixed(1)).toString();
 }
 
+/** The pantry form and the label scanner both fill this in, as typed strings. */
+export interface FoodDraft {
+  name: string;
+  cat: string;
+  type: FoodType;
+  kcal: string;
+  protein: string;
+  carbs: string;
+  fat: string;
+  fiber: string;
+}
+
+export type FoodDraftResult = { ok: true; food: Food } | { ok: false; error: string };
+
+/** Blank, malformed and negative all mean the same thing here: nothing was entered. */
+function numberOr0(raw: string): number {
+  const value = Number(raw);
+  return raw.trim() === "" || !Number.isFinite(value) || value < 0 ? 0 : value;
+}
+
+/**
+ * Turns a typed draft into a pantry entry, or explains why it cannot. Shared so
+ * that a scanned food is held to exactly the same rules as a hand-typed one.
+ */
+export function buildFood(draft: FoodDraft, pantry: Food[]): FoodDraftResult {
+  const name = draft.name.trim();
+  if (name === "") return { ok: false, error: "Give the food a name." };
+
+  const id = slugFood(name);
+  if (pantry.some((f) => f.id === id)) {
+    return { ok: false, error: "A food with that name already exists." };
+  }
+
+  const kcal = Number(draft.kcal);
+  if (draft.kcal.trim() === "" || !Number.isFinite(kcal) || kcal < 0) {
+    return { ok: false, error: "Calories per 100 is required." };
+  }
+
+  return {
+    ok: true,
+    food: {
+      id,
+      name,
+      cat: draft.cat,
+      type: draft.type,
+      kcal,
+      protein: numberOr0(draft.protein),
+      carbs: numberOr0(draft.carbs),
+      fat: numberOr0(draft.fat),
+      fiber: numberOr0(draft.fiber),
+    },
+  };
+}
+
 export function slugFood(name: string): string {
   return (
     "cf-" +

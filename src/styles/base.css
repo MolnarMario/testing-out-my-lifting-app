@@ -26,6 +26,21 @@
   --radius:16px;
   --radius-sm:11px;
   --radius-xs:8px;
+  /* Chart series colours. Deliberately not the UI accents: those are stepped
+     for text and buttons and sit too light against the chart surface to stay
+     apart under colour-blind simulation. Same hue identities, re-stepped and
+     validated as a set (lightness band, chroma floor, CVD separation, contrast).
+     The ORDER is load-bearing — red next to gold fails the CVD gate, red-blue-
+     gold-green passes, which is why stacks draw P/F/C rather than P/C/F. */
+  --viz-1:#e7402e;
+  --viz-2:#5a8fe0;
+  --viz-3:#c98500;
+  --viz-4:#199e70;
+  --viz-5:#8a7bd8;
+  --viz-grid:rgba(255,255,255,.06);
+  --viz-axis:#565b64;
+  --viz-mark:#4b5158;
+  --viz-mark-hi:#6d747e;
   --font-display:"Oswald","Oswald","Arial Narrow",sans-serif;
   --font-body:"Archivo","Archivo",ui-sans-serif,system-ui,sans-serif;
   --shadow:0 1px 0 rgba(255,255,255,.04) inset, 0 18px 40px -24px rgba(0,0,0,.85);
@@ -1439,7 +1454,8 @@ table.log.preview td{padding:8px 9px;font-size:13px;}
 /* Macros (Food tab) — host design language: Oswald display, Archivo body, red accent */
 .mc{display:flex;flex-direction:column;}
 .mc-tabs{display:flex;gap:4px;background:var(--surface);border:1px solid var(--border);border-radius:13px;padding:4px;margin-bottom:16px;}
-.mc-tab{flex:1;font-family:var(--font-display);font-weight:500;font-size:13px;text-transform:uppercase;letter-spacing:.11em;color:var(--muted);background:transparent;border:0;border-radius:9px;padding:9px 8px;cursor:pointer;transition:.16s;display:flex;align-items:center;justify-content:center;gap:7px;}
+/* Four panes have to fit a 320px phone, so the label shrinks rather than wraps. */
+.mc-tab{flex:1 1 0;min-width:0;font-family:var(--font-display);font-weight:500;font-size:clamp(10px,2.9vw,13px);text-transform:uppercase;letter-spacing:.09em;color:var(--muted);background:transparent;border:0;border-radius:9px;padding:9px 6px;cursor:pointer;transition:.16s;display:flex;align-items:center;justify-content:center;gap:6px;white-space:nowrap;overflow:hidden;}
 .mc-tab.on{color:var(--text);background:linear-gradient(180deg,var(--surface-3),var(--surface-2));box-shadow:var(--shadow),inset 0 0 0 1px var(--border-2);}
 .mc-badge{font-size:10px;font-variant-numeric:tabular-nums;color:var(--accent);background:var(--accent-soft);border:1px solid var(--accent-line);border-radius:999px;padding:1px 7px;line-height:1.5;}
 .mc-pane{display:flex;flex-direction:column;animation:rise .35s cubic-bezier(.2,.7,.2,1) both;}
@@ -1678,6 +1694,86 @@ button.mc-datefield{font:inherit;color:inherit;}
 .cell{position:relative;}
 .cell::after{content:"";position:absolute;left:0;right:0;top:-10px;bottom:-6px;}
 
+/* ---------- charts ---------- */
+
+.chart-fig{margin:0;}
+.chart-wrap{position:relative;margin-top:12px;touch-action:pan-y;}
+.chart-svg{display:block;width:100%;overflow:visible;}
+.chart-svg text{font-family:var(--font-display);font-size:10px;letter-spacing:.07em;text-transform:uppercase;fill:var(--viz-axis);font-variant-numeric:tabular-nums;}
+.chart-grid{stroke:var(--viz-grid);stroke-width:1;shape-rendering:crispEdges;}
+.chart-baseline{stroke:var(--border-2);stroke-width:1;shape-rendering:crispEdges;}
+.chart-line{fill:none;stroke-width:2;stroke-linecap:round;stroke-linejoin:round;}
+.chart-ref{stroke-width:1.5;stroke-dasharray:5 4;fill:none;opacity:.75;}
+.chart-band{opacity:.09;}
+/* The 2px surface ring is what keeps overlapping dots and adjacent stack
+   segments legible without adding a second colour. */
+.chart-dot{stroke:var(--panel-lo);stroke-width:2;}
+.chart-crosshair{stroke:var(--border-strong);stroke-width:1;stroke-dasharray:3 3;}
+.chart-hit{fill:transparent;cursor:pointer;}
+.chart-bar{transition:opacity .14s;}
+.chart-wrap.hovering .chart-bar{opacity:.45;}
+.chart-wrap.hovering .chart-bar.on{opacity:1;}
+.chart-pr{fill:var(--accent);stroke:var(--panel-lo);stroke-width:2;}
+
+.chart-legend{display:flex;flex-wrap:wrap;gap:6px 14px;margin-top:11px;}
+.chart-leg{display:inline-flex;align-items:center;gap:6px;font-family:var(--font-display);text-transform:uppercase;
+  letter-spacing:.09em;font-size:10.5px;color:var(--muted);}
+.chart-leg-dot{width:9px;height:9px;border-radius:3px;flex:0 0 auto;}
+.chart-leg-dot.line{height:3px;border-radius:2px;width:13px;}
+
+.chart-hint{font-size:11.5px;color:var(--muted-2);margin:10px 2px 0;line-height:1.45;}
+.chart-hint b{color:var(--text-2);font-weight:600;font-variant-numeric:tabular-nums;}
+.chart-hint .up{color:var(--good);}
+.chart-hint .down{color:var(--accent-2);}
+
+.chart-tip{position:absolute;z-index:5;pointer-events:none;min-width:104px;padding:8px 10px;border-radius:var(--radius-xs);
+  background:var(--surface-3);border:1px solid var(--border-strong);box-shadow:0 14px 30px -18px rgba(0,0,0,.95);
+  transform:translate(-50%,-100%);transition:opacity .12s;}
+.chart-tip-head{font-family:var(--font-display);text-transform:uppercase;letter-spacing:.1em;font-size:9.5px;color:var(--muted);margin-bottom:5px;white-space:nowrap;}
+.chart-tip-row{display:flex;align-items:center;gap:7px;font-size:12px;color:var(--text-2);white-space:nowrap;line-height:1.6;}
+.chart-tip-row .k{flex:1;color:var(--muted);}
+.chart-tip-row .v{font-variant-numeric:tabular-nums;color:var(--text);font-weight:600;}
+.chart-tip-row .v.over{color:var(--danger);}
+.chart-tip-row .v.under{color:var(--good);}
+.chart-tip-dot{width:8px;height:8px;border-radius:2px;flex:0 0 auto;}
+
+/* range control sits above the charts and moves all of them together */
+.range-bar{display:flex;align-items:center;justify-content:space-between;gap:12px;flex-wrap:wrap;margin-bottom:14px;}
+.range-note{font-family:var(--font-display);text-transform:uppercase;letter-spacing:.1em;font-size:10px;color:var(--muted-2);}
+
+/* stat tiles grow a sparkline */
+.stat.sparked{gap:5px;min-width:118px;flex:1 1 118px;}
+.stat .spark{display:block;width:100%;height:20px;overflow:visible;}
+.stat .spark path{fill:none;stroke-width:1.75;stroke-linecap:round;stroke-linejoin:round;}
+
+/* consistency heatmap */
+.heat{display:flex;gap:9px;align-items:flex-start;}
+.heat-dows{display:grid;grid-template-rows:repeat(7,1fr);gap:3px;padding-top:15px;}
+.heat-dows span{font-family:var(--font-display);text-transform:uppercase;letter-spacing:.06em;font-size:8.5px;color:var(--muted-2);
+  height:13px;line-height:13px;}
+.heat-cols{display:flex;gap:3px;}
+.heat-col{display:flex;flex-direction:column;gap:3px;}
+.heat-mon{font-family:var(--font-display);text-transform:uppercase;letter-spacing:.06em;font-size:8.5px;color:var(--muted-2);height:12px;line-height:12px;white-space:nowrap;}
+.heat-cell{width:13px;height:13px;border-radius:3px;border:1px solid var(--border);background:var(--surface-2);padding:0;cursor:default;transition:.14s;}
+.heat-cell.lit{cursor:pointer;border-color:transparent;}
+.heat-cell.lit:hover,.heat-cell.lit:focus-visible{outline:1px solid var(--text-2);outline-offset:1px;}
+.heat-cell.today{border-color:var(--accent-line);}
+.heat-scale{display:flex;align-items:center;gap:5px;margin-top:12px;font-family:var(--font-display);text-transform:uppercase;
+  letter-spacing:.09em;font-size:9.5px;color:var(--muted-2);}
+.heat-scale i{width:11px;height:11px;border-radius:3px;display:inline-block;}
+
+/* bullet bars: the .mc-track language plus a goal tick */
+.bullet{margin-bottom:13px;}
+.bullet:last-child{margin-bottom:0;}
+.bullet-top{display:flex;align-items:baseline;justify-content:space-between;gap:10px;margin-bottom:6px;}
+.bullet-name{display:flex;align-items:center;gap:8px;font-family:var(--font-display);text-transform:uppercase;letter-spacing:.11em;font-size:11.5px;color:var(--text-2);}
+.bullet-val{font-size:12px;color:var(--muted);font-variant-numeric:tabular-nums;}
+.bullet-val b{color:var(--text);font-weight:600;}
+/* No overflow clip here: the goal tick is meant to stand proud of the track. */
+.bullet-track{position:relative;height:8px;border-radius:4px;background:var(--surface-3);}
+.bullet-fill{height:100%;border-radius:4px;transition:width .5s cubic-bezier(.2,.7,.2,1);}
+.bullet-goal{position:absolute;top:-3px;bottom:-3px;width:2px;transform:translateX(-1px);background:var(--text-2);border-radius:1px;}
+
 @media (prefers-reduced-motion: reduce){
   /* !important is deliberate here — a user's motion preference has to beat
      every animation declaration in this file. */
@@ -1689,3 +1785,49 @@ button.mc-datefield{font:inherit;color:inherit;}
   }
 }
 
+
+/* ---- label scanner ---- */
+.mc-scan{flex:0 0 46px;height:42px;border-radius:10px;border:1px solid var(--border-2);background:var(--surface-2);color:var(--muted);display:grid;place-items:center;cursor:pointer;transition:.15s;}
+.mc-scan:hover{color:var(--accent);border-color:var(--accent-line);background:var(--surface-3);}
+.mc-scan svg{width:19px;height:19px;}
+
+.scan-modal{width:min(540px,100%);}
+
+.scan-drop{display:flex;flex-direction:column;align-items:center;gap:6px;padding:34px 18px;border:1px dashed var(--border-strong);border-radius:14px;background:var(--surface-2);cursor:pointer;transition:.15s;text-align:center;}
+.scan-drop:hover{border-color:var(--accent-line);background:var(--surface-3);}
+.scan-drop input{display:none;}
+.scan-drop svg{width:30px;height:30px;color:var(--muted);}
+.scan-drop .t{font-family:var(--font-display);text-transform:uppercase;letter-spacing:.1em;font-size:13px;color:var(--text-2);}
+.scan-drop .d{font-size:12px;color:var(--muted-2);}
+
+.scan-frame{position:relative;margin:4px 0 12px;border-radius:12px;overflow:hidden;background:#000;touch-action:none;cursor:crosshair;user-select:none;-webkit-user-select:none;}
+.scan-frame img{display:block;width:100%;max-height:52vh;object-fit:contain;pointer-events:none;}
+/* The huge spread dims everything outside the box without a second element. */
+.scan-sel{position:absolute;border:2px solid var(--accent);background:rgba(231,64,46,.14);box-shadow:0 0 0 9999px rgba(6,7,10,.55);border-radius:2px;pointer-events:none;}
+
+.scan-actions{display:flex;align-items:center;gap:9px;flex-wrap:wrap;}
+.scan-actions .btn{margin-left:auto;}
+
+.scan-working{padding:22px 4px 10px;}
+.scan-stage{font-family:var(--font-display);text-transform:uppercase;letter-spacing:.1em;font-size:12px;color:var(--text-2);margin-bottom:10px;}
+.scan-bar{height:6px;border-radius:999px;background:var(--surface-3);overflow:hidden;}
+.scan-fill{height:100%;border-radius:999px;background:linear-gradient(90deg,var(--accent-2),var(--accent));transition:width .25s ease;}
+.scan-working .modal-note{margin-top:14px;}
+
+.scan-notes{list-style:none;margin:0 0 14px;padding:10px 12px;display:flex;flex-direction:column;gap:6px;border:1px solid rgba(255,176,32,.3);background:rgba(255,176,32,.07);border-radius:10px;}
+.scan-notes li{font-size:12.5px;line-height:1.45;color:var(--text-2);}
+
+/* Fields the scan could not read, so a blank is never mistaken for a zero. */
+.scan-unread .field-label::after{content:" — not read";color:var(--muted-2);letter-spacing:.04em;}
+.scan-unread .text-input{border-style:dashed;}
+
+.scan-log{display:flex;align-items:center;gap:11px;margin-top:14px;padding:12px;border:1px solid var(--border-2);border-radius:12px;background:var(--surface-2);}
+.scan-log-label{flex:1;min-width:0;font-family:var(--font-display);text-transform:uppercase;letter-spacing:.1em;font-size:12px;color:var(--text-2);}
+.scan-log .mc-qty{flex:0 0 118px;}
+.scan-log .mc-qty input:disabled,.scan-log .mc-uu:disabled{opacity:.4;cursor:not-allowed;}
+
+@media (max-width:380px){
+  .mc-scan{flex:0 0 40px;}
+  .scan-log{flex-wrap:wrap;}
+  .scan-log-label{flex:1 0 auto;}
+}

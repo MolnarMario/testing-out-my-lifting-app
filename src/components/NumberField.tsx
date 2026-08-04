@@ -54,16 +54,15 @@ export function NumberField({
         {suffix && <span className="num-suffix">{suffix}</span>}
       </div>
 
-      <button className="num-btn" onClick={() => bump(step)} aria-label={`Increase ${label}`}>
-        +
-      </button>
-
-      {steps && steps.length > 0 && (
+      {/* Quick-add buttons stand in for the plus rather than sitting beside it.
+          Keeping both leaves no room for the input itself on a 360px phone. */}
+      {steps && steps.length > 0 ? (
         <div className="num-steps">
           {steps.map((s) => (
             <button
               key={s}
               className="num-step"
+              tabIndex={-1}
               onClick={() => bump(s)}
               aria-label={`Add ${s} to ${label}`}
             >
@@ -71,6 +70,10 @@ export function NumberField({
             </button>
           ))}
         </div>
+      ) : (
+        <button className="num-btn" onClick={() => bump(step)} aria-label={`Increase ${label}`}>
+          +
+        </button>
       )}
     </div>
   );

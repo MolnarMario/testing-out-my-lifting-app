@@ -7,6 +7,7 @@ import { SessionCard } from "./SessionCard";
 import { NotesCard } from "./NotesCard";
 import { ExercisesPane } from "./ExercisesPane";
 import { MonthCalendar } from "./MonthCalendar";
+import { ProgressPane } from "./ProgressPane";
 import { useDays } from "../../hooks/useDays";
 import { useLibrary } from "../../hooks/useLibrary";
 import { useMaxes } from "../../hooks/useMaxes";
@@ -18,11 +19,12 @@ interface Props {
   onLoadOnBar: (weight: number) => void;
 }
 
-type Pane = "today" | "calendar" | "exercises";
+type Pane = "today" | "calendar" | "progress" | "exercises";
 
 const PANES: { key: Pane; label: string }[] = [
   { key: "today", label: "Today" },
   { key: "calendar", label: "Calendar" },
+  { key: "progress", label: "Progress" },
   { key: "exercises", label: "Exercises" },
 ];
 
@@ -79,6 +81,20 @@ export function WorkoutTab({ unit, onLoadOnBar }: Props) {
         <MonthCalendar
           days={days}
           library={library}
+          unit={unit}
+          onOpenDay={(next) => {
+            setDate(next);
+            setEditingId(null);
+            setPane("today");
+          }}
+        />
+      )}
+
+      {pane === "progress" && (
+        <ProgressPane
+          days={days}
+          library={library}
+          maxes={maxes}
           unit={unit}
           onOpenDay={(next) => {
             setDate(next);

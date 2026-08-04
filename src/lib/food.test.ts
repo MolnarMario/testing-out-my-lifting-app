@@ -2,6 +2,7 @@ import {
   GRAMS_PER_OZ,
   ML_PER_FLOZ,
   baseUnitFor,
+  buildFood,
   fromBaseQty,
   num,
   slugFood,
@@ -10,7 +11,7 @@ import {
   totalsFor,
   unitLabel,
 } from "./food.ts";
-import type { FoodEntry } from "./food.ts";
+import type { Food, FoodDraft, FoodEntry } from "./food.ts";
 
 let fails = 0;
 
@@ -98,6 +99,72 @@ check("totals add up", Math.round(combined.kcal), 512);
 check("num trims trailing zero", [num(12), num(12.5), num(12.04), num(0)], ["12", "12.5", "12", "0"]);
 check("slug is stable", slugFood("Greek yoghurt 2%"), "cf-greek-yoghurt-2");
 check("slug trims edges", slugFood("  Whey isolate  "), "cf-whey-isolate");
+
+// --- building a food from a draft --------------------------------------------
+// Shared by the pantry form and the label scanner, so both reject the same things.
+
+const draft = (over: Partial<FoodDraft> = {}): FoodDraft => ({
+  name: "Greek yoghurt 2%",
+  cat: "Dairy & Eggs",
+  type: "solid",
+  kcal: "59",
+  protein: "10",
+  carbs: "3.6",
+  fat: "1.7",
+  fiber: "",
+  ...over,
+});
+
+const built = buildFood(draft(), []);
+check("a full draft builds", built.ok && built.food, {
+  id: "cf-greek-yoghurt-2",
+  name: "Greek yoghurt 2%",
+  cat: "Dairy & Eggs",
+  type: "solid",
+  kcal: 59,
+  protein: 10,
+  carbs: 3.6,
+  fat: 1.7,
+  fiber: 0,
+});
+
+check("blank macros become zero", built.ok && built.food.fiber, 0);
+check("the name is trimmed", (buildFood(draft({ name: "  Whey  " }), []) as { food: Food }).food.name, "Whey");
+
+check("an empty name is refused", buildFood(draft({ name: "   " }), []), {
+  ok: false,
+  error: "Give the food a name.",
+});
+check("missing calories are refused", buildFood(draft({ kcal: "" }), []), {
+  ok: false,
+  error: "Calories per 100 is required.",
+});
+check("negative calories are refused", buildFood(draft({ kcal: "-5" }), []), {
+  ok: false,
+  error: "Calories per 100 is required.",
+});
+check("nonsense calories are refused", buildFood(draft({ kcal: "abc" }), []), {
+  ok: false,
+  error: "Calories per 100 is required.",
+});
+
+// Names collide on their slug, not their spelling: "Whey Isolate" and "whey
+// isolate" are the same pantry entry.
+const existing: Food[] = [
+  { id: "cf-whey-isolate", name: "Whey isolate", cat: "Other", type: "solid", kcal: 380, fat: 1, carbs: 4, fiber: 0, protein: 88 },
+];
+check("a duplicate name is refused", buildFood(draft({ name: "WHEY ISOLATE" }), existing), {
+  ok: false,
+  error: "A food with that name already exists.",
+});
+check("a different name is allowed", buildFood(draft({ name: "Whey concentrate" }), existing).ok, true);
+
+// A negative macro is a typo, not an instruction to subtract from the day.
+check(
+  "negative macros fall back to zero",
+  (buildFood(draft({ protein: "-10" }), []) as { food: Food }).food.protein,
+  0,
+);
 
 console.log(fails === 0 ? "\nALL PASS" : `\n${fails} FAILURES`);
 // Throwing (rather than setting process.exitCode) fails the run without

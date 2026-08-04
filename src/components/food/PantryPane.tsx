@@ -1,11 +1,13 @@
 import { useMemo, useState } from "react";
-import { FOOD_CATEGORIES, slugFood } from "../../lib/food";
+import { ScanLine } from "lucide-react";
+import { FOOD_CATEGORIES, buildFood } from "../../lib/food";
 import type { Food, FoodCategory, FoodType } from "../../lib/food";
 
 interface Props {
   pantry: Food[];
   onAdd: (food: Food) => void;
   onRemove: (id: string) => void;
+  onOpenScan: () => void;
 }
 
 const MACRO_FIELDS = [
@@ -21,7 +23,7 @@ type Draft = Record<MacroKey, string>;
 
 const EMPTY_DRAFT: Draft = { kcal: "", protein: "", carbs: "", fat: "", fiber: "" };
 
-export function PantryPane({ pantry, onAdd, onRemove }: Props) {
+export function PantryPane({ pantry, onAdd, onRemove, onOpenScan }: Props) {
   const [query, setQuery] = useState("");
   const [selectedId, setSelectedId] = useState<string | null>(null);
 
@@ -43,41 +45,13 @@ export function PantryPane({ pantry, onAdd, onRemove }: Props) {
   const selected = pantry.find((f) => f.id === selectedId) ?? null;
 
   function submit() {
-    const trimmed = name.trim();
-    if (trimmed === "") {
-      setError("Give the food a name.");
+    const result = buildFood({ name, cat, type, ...draft }, pantry);
+    if (!result.ok) {
+      setError(result.error);
       return;
     }
 
-    const id = slugFood(trimmed);
-    if (pantry.some((f) => f.id === id)) {
-      setError("A food with that name already exists.");
-      return;
-    }
-
-    const kcal = Number(draft.kcal);
-    if (draft.kcal.trim() === "" || !Number.isFinite(kcal) || kcal < 0) {
-      setError("Calories per 100 is required.");
-      return;
-    }
-
-    const numberOr0 = (raw: string) => {
-      const n = Number(raw);
-      return raw.trim() === "" || !Number.isFinite(n) || n < 0 ? 0 : n;
-    };
-
-    onAdd({
-      id,
-      name: trimmed,
-      cat,
-      type,
-      kcal,
-      protein: numberOr0(draft.protein),
-      carbs: numberOr0(draft.carbs),
-      fat: numberOr0(draft.fat),
-      fiber: numberOr0(draft.fiber),
-    });
-
+    onAdd(result.food);
     setName("");
     setDraft(EMPTY_DRAFT);
     setError("");
@@ -90,9 +64,14 @@ export function PantryPane({ pantry, onAdd, onRemove }: Props) {
       <div className="card">
         <div className="card-head" style={{ marginBottom: 4 }}>
           <span className="card-title">Add food</span>
+          <button type="button" className="modal-head-btn" onClick={onOpenScan}>
+            <ScanLine aria-hidden="true" />
+            Scan label
+          </button>
         </div>
         <p className="modal-note">
-          Enter the numbers as they appear on the label, per 100 g or 100 ml.
+          Enter the numbers as they appear on the label, per 100 g or 100 ml — or photograph
+          the label and let the scanner read them.
         </p>
 
         <div className="add-ex-form">
