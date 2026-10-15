@@ -148,7 +148,7 @@ check("nonsense calories are refused", buildFood(draft({ kcal: "abc" }), []), {
   error: "Calories per 100 is required.",
 });
 
-// Names collide on their slug, not their spelling: "Whey Isolate" and "whey
+// Duplicates are judged by name, ignoring case: "Whey Isolate" and "whey
 // isolate" are the same pantry entry.
 const existing: Food[] = [
   { id: "cf-whey-isolate", name: "Whey isolate", cat: "Other", type: "solid", kcal: 380, fat: 1, carbs: 4, fiber: 0, protein: 88 },
@@ -158,6 +158,11 @@ check("a duplicate name is refused", buildFood(draft({ name: "WHEY ISOLATE" }), 
   error: "A food with that name already exists.",
 });
 check("a different name is allowed", buildFood(draft({ name: "Whey concentrate" }), existing).ok, true);
+
+// "fata" and "față" fold to one slug but are different words.
+const fata: Food[] = [{ ...existing[0], id: "cf-fata", name: "fata" }];
+const fata2 = buildFood(draft({ name: "față" }), fata) as { ok: boolean; food: Food };
+check("a name that only shares a slug is allowed, with its own id", [fata2.ok, fata2.food.id !== "cf-fata", fata2.food.id.startsWith("cf-fata-")], [true, true, true]);
 
 // A negative macro is a typo, not an instruction to subtract from the day.
 check(

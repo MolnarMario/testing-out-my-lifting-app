@@ -51,6 +51,34 @@ export function isValidBarcode(code: string): boolean {
   return (10 - (sum % 10)) % 10 === check;
 }
 
+/**
+ * Expands a UPC-E code to the UPC-A it abbreviates, or null if it is not one.
+ *
+ * UPC-E is eight digits like EAN-8, but its check digit belongs to the
+ * expanded twelve-digit code, so the two cannot be told apart by length or
+ * validated the same way. Only the detector knows which symbology it read.
+ */
+export function expandUpcE(code: string): string | null {
+  if (!/^[01]\d{7}$/.test(code)) return null;
+  const [n, d1, d2, d3, d4, d5, d6, check] = [...code];
+  const body =
+    d6 <= "2"
+      ? `${d1}${d2}${d6}0000${d3}${d4}${d5}`
+      : d6 === "3"
+        ? `${d1}${d2}${d3}00000${d4}${d5}`
+        : d6 === "4"
+          ? `${d1}${d2}${d3}${d4}00000${d5}`
+          : `${d1}${d2}${d3}${d4}${d5}0000${d6}`;
+  const upcA = `${n}${body}${check}`;
+  return isValidBarcode(upcA) ? upcA : null;
+}
+
+/** The code to look up for what a detector read, or null if it does not check out. */
+export function productCode(raw: string, format: string | undefined): string | null {
+  if (format === "upc_e") return expandUpcE(raw);
+  return isValidBarcode(raw) ? raw : null;
+}
+
 // --- mapping -----------------------------------------------------------------
 
 /** Open Food Facts is crowd-sourced: numbers arrive as numbers, strings, or junk. */
@@ -246,6 +274,8 @@ export function toProduct(code: string, payload: unknown): BarcodeProduct | null
 
 interface DetectedBarcode {
   rawValue: string;
+  /** "ean_13", "upc_e", ... per the Shape Detection spec. */
+  format?: string;
 }
 
 interface BarcodeDetectorLike {
@@ -337,8 +367,9 @@ async function zxingDetect(bitmap: ImageBitmap): Promise<string | null> {
         new BinaryBitmap(new HybridBinarizer(source)),
         hints as Map<never, never>,
       );
-      const code = result.getText();
-      if (isValidBarcode(code)) return code;
+      const format = result.getBarcodeFormat() === BarcodeFormat.UPC_E ? "upc_e" : undefined;
+      const code = productCode(result.getText(), format);
+      if (code !== null) return code;
     } catch {
       // NotFoundException is the ordinary "no barcode this way round"; try the other.
     }
@@ -363,8 +394,10 @@ export async function detectBarcode(image: Blob): Promise<string | null> {
 
       // A misread check digit means someone else's macros, so only a valid code
       // is worth acting on.
-      const native = codes.map((code) => code.rawValue).find(isValidBarcode);
-      if (native !== undefined) return native;
+      for (const detected of codes) {
+        const code = productCode(detected.rawValue, detected.format);
+        if (code !== null) return code;
+      }
     }
 
     return await zxingDetect(bitmap);

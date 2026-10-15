@@ -281,6 +281,10 @@ export function snapRequest(
     if (Math.abs(snapped - requested) > 0.01) return { value: snapped, snapped: true };
   }
 
+  // Record mode skips the snap but not the ceiling: a typed 99999 would
+  // otherwise ask the bar to draw thousands of plates.
+  if (requested > maxWeight) return { value: maxWeight, snapped: true };
+
   return { value: requested, snapped: false };
 }
 

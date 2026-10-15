@@ -36,14 +36,22 @@ build** — every style the original actually used is now driven by this code.
 ## Importing data from the original build
 
 On first load, if data written by the original single-file build is found on the
-device, a banner offers to import it. It maps the old shapes onto the new —
-resolving each set's exercise by name, converting weights into canonical
-kilograms, renaming the can counter — and reports how many days and sets came
-across, naming any exercise it could not resolve so nothing goes missing
-silently.
+device, a banner offers to import it. It maps the old shapes onto the new. Each
+set's exercise is resolved by name, and a name the library does not know becomes
+a custom exercise rather than losing its sets. Weights convert into canonical
+kilograms, a blank legacy weight imports as a 0 kg bodyweight set, and the food
+journal's entries, water, cans and weigh-ins come across from the separate
+places the old build kept them. Days already logged in the new build are left
+as they are. The banner reports what came across and names anything the new
+build has no place for (body-fat readings, edits to built-in exercises).
 
-It runs at most once (guarded by `ironlog.migrated.v1`) and **never deletes the
-original keys**, so a bad import can be retried by clearing that marker.
+It runs at most once (guarded by `ironlog.migrated.v1`). Three keys are shared
+between the builds and get overwritten (`ironlog.days`, `ironlog.custom`,
+`ironlog.maxes`), so their raw contents are copied to `ironlog-legacy-backup.v1`
+first. That name sits outside the `ironlog.` prefix, so "Clear saved data" on the
+crash screen does not delete it. The old food journal (`macroJournal.v1`) is
+never modified. After an import the page reloads, so no component can write its
+pre-import copy of the data back over the result.
 
 ## Deploying
 

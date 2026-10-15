@@ -1,7 +1,7 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { num } from "../../lib/food";
 import type { FoodGoals } from "../../lib/food";
-import { fromKg } from "../../lib/format";
+import { decimalInput, fromKg } from "../../lib/format";
 import type { Unit } from "../../lib/types";
 
 interface Props {
@@ -27,8 +27,40 @@ const TARGETS = [
   { key: "water", label: "Water", unit: "ml", placeholder: "3000" },
 ] as const;
 
+type TargetKey = (typeof TARGETS)[number]["key"];
+type Drafts = Record<TargetKey, string>;
+
+const toDraft = (v: number | null) => (v === null ? "" : String(v));
+
+function draftsFrom(goals: FoodGoals): Drafts {
+  return Object.fromEntries(TARGETS.map(({ key }) => [key, toDraft(goals[key])])) as Drafts;
+}
+
 export function GoalsPane({ goals, onChange, unit, bodyweight }: Props) {
   const [perKg, setPerKg] = useState(false);
+
+  // The fields hold text, not the stored numbers: a number cannot be "2." on
+  // its way to "2.5", so binding the field to it would eat the decimal point.
+  const [drafts, setDrafts] = useState<Drafts>(() => draftsFrom(goals));
+
+  // A preset (or another tab) changing a goal rewrites only the fields that no
+  // longer say the same number, so a half-typed "2." is left alone.
+  useEffect(() => {
+    setDrafts((prev) => {
+      let changed = false;
+      const next = { ...prev };
+      for (const { key } of TARGETS) {
+        const goal = goals[key];
+        const text = prev[key].trim();
+        const same = goal === null ? text === "" : text !== "" && Number(text) === goal;
+        if (!same) {
+          next[key] = toDraft(goal);
+          changed = true;
+        }
+      }
+      return changed ? next : prev;
+    });
+  }, [goals]);
 
   const bw = bodyweight === null ? null : fromKg(bodyweight, unit);
   const canPerKg = bw !== null && bw > 0;
@@ -104,10 +136,11 @@ export function GoalsPane({ goals, onChange, unit, bodyweight }: Props) {
                   inputMode="decimal"
                   placeholder={placeholder}
                   aria-label={`${label} target`}
-                  value={goals[key] === null ? "" : String(goals[key])}
+                  value={drafts[key]}
                   onChange={(e) => {
-                    const raw = e.target.value;
-                    if (raw !== "" && !/^\d*\.?\d*$/.test(raw)) return;
+                    const raw = decimalInput(e.target.value);
+                    if (raw === null) return;
+                    setDrafts((prev) => ({ ...prev, [key]: raw }));
                     if (raw.trim() === "") {
                       onChange({ [key]: null });
                       return;

@@ -1,5 +1,6 @@
 import { Dumbbell, Layers, Pencil, Trash2 } from "lucide-react";
 import { formatWeight, fromKg } from "../../lib/format";
+import { setVolume, timedIn } from "../../lib/stats";
 import type { Exercise, SetEntry, Unit } from "../../lib/types";
 
 interface Props {
@@ -60,8 +61,10 @@ export function LogTable({
     return { set, n };
   });
 
-  const totalReps = sets.reduce((sum, s) => sum + s.reps, 0);
-  const volumeKg = sets.reduce((sum, s) => sum + s.weight * s.reps, 0);
+  // A timed hold's `reps` are seconds, so it counts toward neither total.
+  const isTimed = timedIn(library);
+  const totalReps = sets.reduce((sum, s) => sum + (isTimed(s.exerciseId) ? 0 : s.reps), 0);
+  const volumeKg = setVolume(sets, isTimed);
   const heaviestKg = sets.reduce((best, s) => Math.max(best, s.weight), 0);
 
   return (

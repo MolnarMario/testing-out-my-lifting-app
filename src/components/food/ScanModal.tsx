@@ -15,9 +15,12 @@ import type { MacroKey } from "../../lib/label";
 import { displayToSource, recognizeLabel, warmUpOcr } from "../../lib/ocr";
 import type { CropRect, OcrProgress } from "../../lib/ocr";
 import { macroDrafts, scanBarcode } from "../../lib/barcode";
+import { decimalInput, formatDateLong, todayKey } from "../../lib/format";
 
 interface Props {
   pantry: Food[];
+  /** The day a logged portion lands on: the one open in the food tab, not always today. */
+  date: string;
   onSave: (food: Food, log: { qty: number; unit: QtyUnit } | null) => void;
   onClose: () => void;
 }
@@ -61,7 +64,8 @@ interface Selection {
   height: number;
 }
 
-export function ScanModal({ pantry, onSave, onClose }: Props) {
+export function ScanModal({ pantry, date, onSave, onClose }: Props) {
+  const dayName = date === todayKey() ? "today" : formatDateLong(date);
   const [stage, setStage] = useState<Stage>("capture");
   const [photo, setPhoto] = useState<{ file: File; url: string } | null>(null);
   const [progress, setProgress] = useState<OcrProgress>({ status: "", progress: 0, phase: "locating" });
@@ -247,7 +251,7 @@ export function ScanModal({ pantry, onSave, onClose }: Props) {
     const amount = Number(qty);
     const valid = qty.trim() !== "" && Number.isFinite(amount) && amount > 0;
     if (logToday && !valid) {
-      setError("Enter how much you had, or turn off adding it to today.");
+      setError(`Enter how much you had, or turn off adding it to ${dayName}.`);
       return;
     }
 
@@ -468,10 +472,8 @@ export function ScanModal({ pantry, onSave, onClose }: Props) {
                         value={draft[key]}
                         aria-label={`${label} per 100`}
                         onChange={(event) => {
-                          const next = event.target.value;
-                          if (next === "" || /^\d*\.?\d*$/.test(next)) {
-                            setDraft((prev) => ({ ...prev, [key]: next }));
-                          }
+                          const next = decimalInput(event.target.value);
+                          if (next !== null) setDraft((prev) => ({ ...prev, [key]: next }));
                         }}
                       />
                       <span className="unit">{unit}</span>
@@ -485,14 +487,14 @@ export function ScanModal({ pantry, onSave, onClose }: Props) {
                   type="button"
                   role="switch"
                   aria-checked={logToday}
-                  aria-label="Also add this to today"
+                  aria-label={`Also add this to ${dayName}`}
                   className={logToday ? "switch on" : "switch"}
                   onClick={() => setLogToday((on) => !on)}
                 >
                   <span className="knob" />
                 </button>
 
-                <span className="scan-log-label">Also add to today</span>
+                <span className="scan-log-label">Also add to {dayName}</span>
 
                 <div className="mc-qty">
                   <input
@@ -503,8 +505,8 @@ export function ScanModal({ pantry, onSave, onClose }: Props) {
                     value={qty}
                     disabled={!logToday}
                     onChange={(event) => {
-                      const next = event.target.value;
-                      if (next === "" || /^\d*\.?\d*$/.test(next)) setQty(next);
+                      const next = decimalInput(event.target.value);
+                      if (next !== null) setQty(next);
                     }}
                   />
                   <button

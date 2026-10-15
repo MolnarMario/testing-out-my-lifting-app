@@ -18,6 +18,7 @@ import {
   e1rmSeries,
   personalRecords,
   sessionHeatmap,
+  timedIn,
   trainingKpis,
   weeklySetsByGroup,
   weeklyVolume,
@@ -96,22 +97,25 @@ export function ProgressPane({ days, library, maxes, unit, onOpenDay }: Props) {
     return best || library.find((e) => !e.timed)?.id || "";
   }, [days, library]);
 
-  const activeLift = library.some((e) => e.id === liftId) ? liftId : defaultLift;
+  // The picker never offers a timed hold, but the saved choice is only a string
+  // in storage; a plank would chart its seconds as reps and invent a 1RM.
+  const activeLift = library.some((e) => e.id === liftId && !e.timed) ? liftId : defaultLift;
   const lift = library.find((e) => e.id === activeLift) ?? null;
   const nameOf = useMemo(() => new Map(library.map((e) => [e.id, e.name])), [library]);
 
-  const kpis = useMemo(() => trainingKpis(days, range), [days, range]);
+  const isTimed = useMemo(() => timedIn(library), [library]);
+  const kpis = useMemo(() => trainingKpis(days, range, isTimed), [days, range, isTimed]);
 
   // Two series on purpose: the scoped one belongs to the volume card's own
   // toggle, while the tile and the shared-timeline panel always mean all lifts.
   // A control in one card must not quietly redraw another.
-  const volume = useMemo(() => weeklyVolume(days, range), [days, range]);
+  const volume = useMemo(() => weeklyVolume(days, range, undefined, isTimed), [days, range, isTimed]);
   const scopedVolume = useMemo(
     () =>
       volumeScope === "all" || !activeLift
         ? volume
-        : weeklyVolume(days, range, (s) => s.exerciseId === activeLift),
-    [volume, days, range, volumeScope, activeLift],
+        : weeklyVolume(days, range, (s) => s.exerciseId === activeLift, isTimed),
+    [volume, days, range, volumeScope, activeLift, isTimed],
   );
   const byGroup = useMemo(
     () => weeklySetsByGroup(days, library, range, GROUP_STACK),
