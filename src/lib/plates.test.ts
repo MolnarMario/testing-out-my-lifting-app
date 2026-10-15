@@ -47,6 +47,7 @@ check("kg 126.25 unreachable, rounds down", [r.status, r.totalWeight, r.shortBy]
 // snapping
 check("snap kg 101 -> 100", snapRequest(101, "kg", 20, 5, false, 515), { value: 100, snapped: true });
 check("snap kg 101 record mode untouched", snapRequest(101, "kg", 20, 5, true, 515), { value: 101, snapped: false });
+check("record mode still caps at the maximum", snapRequest(99999, "kg", 20, 5, true, 515), { value: 515, snapped: true });
 check("snap lb 227 -> 225", snapRequest(227, "lb", 45, 0, false, 1135), { value: 225, snapped: true });
 check("snap kg 125 already valid", snapRequest(125, "kg", 20, 5, false, 515), { value: 125, snapped: false });
 

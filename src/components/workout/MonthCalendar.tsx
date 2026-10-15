@@ -16,7 +16,8 @@ import { READINESS_KEYS, READINESS_MAX } from "../../lib/types";
 import type { DayLog, Exercise, Unit } from "../../lib/types";
 import type { DayMap } from "../../hooks/useDays";
 import { useFood } from "../../hooks/useFood";
-import { totalsFor, num } from "../../lib/food";
+import { ateSomething, dayKcal, totalsFor, num } from "../../lib/food";
+import { setVolume, timedIn } from "../../lib/stats";
 import { Droplet, Scale } from "lucide-react";
 
 interface Props {
@@ -97,6 +98,8 @@ export function MonthCalendar({ days, library, unit, onOpenDay }: Props) {
     return out;
   }, [cursor]);
 
+  const isTimed = useMemo(() => timedIn(library), [library]);
+
   const monthStats = useMemo(() => {
     let sessions = 0;
     let sets = 0;
@@ -109,12 +112,12 @@ export function MonthCalendar({ days, library, unit, onOpenDay }: Props) {
       if (!day || day.sets.length === 0) return;
       sessions++;
       sets += day.sets.length;
-      volumeKg += day.sets.reduce((sum, s) => sum + s.weight * s.reps, 0);
+      volumeKg += setVolume(day.sets, isTimed);
       minutes += sessionMinutes(day) ?? 0;
     });
 
     return { sessions, sets, volumeKg, minutes };
-  }, [cells, days]);
+  }, [cells, days, isTimed]);
 
   const open = openDate ? (days[openDate] ?? null) : null;
 
@@ -223,13 +226,13 @@ export function MonthCalendar({ days, library, unit, onOpenDay }: Props) {
             const extra = perExercise.length - shown.length;
 
             const food = view === "combined" ? foodState.days[key] : undefined;
-            const foodTotals = food ? totalsFor(food.entries) : null;
-            const ateSomething = !!foodTotals && foodTotals.kcal > 0;
+            const foodTotals = ateSomething(food) ? { ...totalsFor(food.entries), kcal: dayKcal(food) } : null;
+            const ate = foodTotals !== null;
 
             const classes = [
               "ov-cell",
               view === "combined" ? "uni-cell" : "",
-              hasWork || ateSomething ? "has" : "",
+              hasWork || ate ? "has" : "",
               key === todayKey() ? "today" : "",
             ]
               .filter(Boolean)
@@ -273,7 +276,7 @@ export function MonthCalendar({ days, library, unit, onOpenDay }: Props) {
 
                 {view === "combined" && (
                   <div className="uni-nutri">
-                    {ateSomething ? (
+                    {foodTotals ? (
                       <>
                         <span className="uni-divider" />
                         <span

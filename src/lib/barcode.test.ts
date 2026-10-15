@@ -1,9 +1,11 @@
 ﻿import {
   guessCategory,
   guessType,
+  expandUpcE,
   isValidBarcode,
   macroDrafts,
   mapNutriments,
+  productCode,
   productName,
   toProduct,
 } from "./barcode.ts";
@@ -34,6 +36,14 @@ check("a wrong check digit is refused", isValidBarcode("5449000000997"), false);
 check("a misread last digit is refused", isValidBarcode("5941234567890"), false);
 check("wrong length is refused", isValidBarcode("12345"), false);
 check("letters are refused", isValidBarcode("59412345678AB"), false);
+
+// UPC-E's check digit belongs to the expanded UPC-A, so it is checked there.
+check("UPC-E ending 5-9 expands", expandUpcE("01234565"), "012345000065");
+check("UPC-E ending 0-2 expands", expandUpcE("04252614"), "042100005264");
+check("a UPC-E with a wrong check digit is refused", expandUpcE("01234566"), null);
+check("a detected UPC-E is looked up as UPC-A", productCode("04252614", "upc_e"), "042100005264");
+check("an EAN-8 is left as it is", productCode("96385074", "ean_8"), "96385074");
+check("an EAN-8 is not mistaken for UPC-E", productCode("96385074", undefined), "96385074");
 check("empty is refused", isValidBarcode(""), false);
 check("spaces are refused", isValidBarcode("5449 0000 00996"), false);
 

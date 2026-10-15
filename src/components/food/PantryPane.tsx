@@ -1,6 +1,7 @@
 import { useMemo, useState } from "react";
 import { ScanLine } from "lucide-react";
-import { FOOD_CATEGORIES, buildFood } from "../../lib/food";
+import { FOOD_CATEGORIES, buildFood, categoryOf } from "../../lib/food";
+import { decimalInput } from "../../lib/format";
 import type { Food, FoodCategory, FoodType } from "../../lib/food";
 
 interface Props {
@@ -38,7 +39,7 @@ export function PantryPane({ pantry, onAdd, onRemove, onOpenScan }: Props) {
     const matches = q === "" ? pantry : pantry.filter((f) => f.name.toLowerCase().includes(q));
     return FOOD_CATEGORIES.map((c) => ({
       cat: c,
-      items: matches.filter((f) => f.cat === c),
+      items: matches.filter((f) => categoryOf(f) === c),
     })).filter((g) => g.items.length > 0);
   }, [pantry, query]);
 
@@ -128,10 +129,8 @@ export function PantryPane({ pantry, onAdd, onRemove, onOpenScan }: Props) {
                   value={draft[key]}
                   aria-label={`${label} per 100`}
                   onChange={(e) => {
-                    const next = e.target.value;
-                    if (next === "" || /^\d*\.?\d*$/.test(next)) {
-                      setDraft((prev) => ({ ...prev, [key]: next }));
-                    }
+                    const next = decimalInput(e.target.value);
+                    if (next !== null) setDraft((prev) => ({ ...prev, [key]: next }));
                   }}
                 />
                 <span className="unit">{unit}</span>

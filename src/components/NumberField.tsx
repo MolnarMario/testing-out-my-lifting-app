@@ -1,3 +1,5 @@
+import { decimalInput } from "../lib/format";
+
 interface Props {
   value: string;
   onChange: (next: string) => void;
@@ -47,8 +49,8 @@ export function NumberField({
           placeholder={placeholder}
           aria-label={label}
           onChange={(e) => {
-            const next = e.target.value;
-            if (next === "" || /^\d*\.?\d*$/.test(next)) onChange(next);
+            const next = decimalInput(e.target.value);
+            if (next !== null) onChange(next);
           }}
         />
         {suffix && <span className="num-suffix">{suffix}</span>}

@@ -1,7 +1,7 @@
 import { useMemo, useState } from "react";
 import { ChevronLeft, ChevronRight, Droplet, Scale, X } from "lucide-react";
 import { useEscape } from "../../hooks/useEscape";
-import { totalsFor, num } from "../../lib/food";
+import { ateSomething, dayKcal, totalsFor, num } from "../../lib/food";
 import type { FoodDay, FoodGoals } from "../../lib/food";
 import { dateKey, fromKg, keyToDate, todayKey } from "../../lib/format";
 import type { Unit } from "../../lib/types";
@@ -95,12 +95,12 @@ export function FoodCalendar({ days, goals, unit, initialDate, onPick, onClose }
                 if (!key) return <div className="mc-cal-cell" key={`blank-${i}`} style={{ opacity: 0 }} />;
 
                 const day = days[key];
-                const totals = day ? totalsFor(day.entries) : null;
-                const logged = !!totals && totals.kcal > 0;
-                const over = kcalGoal > 0 && logged && totals.kcal > kcalGoal;
-                const under = kcalGoal > 0 && logged && totals.kcal <= kcalGoal;
+                const logged = ateSomething(day);
+                const totals = logged ? { ...totalsFor(day.entries), kcal: dayKcal(day) } : null;
+                const over = kcalGoal > 0 && totals !== null && totals.kcal > kcalGoal;
+                const under = kcalGoal > 0 && totals !== null && totals.kcal <= kcalGoal;
 
-                const macroSum = logged ? totals.protein + totals.carbs + totals.fat : 0;
+                const macroSum = totals ? totals.protein + totals.carbs + totals.fat : 0;
                 const pct = (v: number) => (macroSum > 0 ? (v / macroSum) * 100 : 0);
 
                 const classes = [
@@ -115,13 +115,12 @@ export function FoodCalendar({ days, goals, unit, initialDate, onPick, onClose }
                   <button
                     className={classes}
                     key={key}
-                    disabled={!day}
                     onClick={() => onPick(key)}
-                    aria-label={`${key}${logged ? `, ${Math.round(totals.kcal)} kcal` : ", nothing logged"}`}
+                    aria-label={`${key}${totals ? `, ${Math.round(totals.kcal)} kcal` : ", nothing logged"}`}
                   >
                     <div className="mc-cal-day">{dayNumber}</div>
 
-                    {logged ? (
+                    {totals ? (
                       <>
                         <div
                           className={

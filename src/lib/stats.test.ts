@@ -2,6 +2,7 @@ import {
   alphaForHalfLife,
   barPath,
   daysBetween,
+  eachDay,
   eachWeek,
   ema,
   labelIndices,
@@ -21,7 +22,9 @@ import {
   nutritionKpis,
   personalRecords,
   proteinPerKgSeries,
+  sessionHeatmap,
   setVolume,
+  timedIn,
   trainingKpis,
   weeklySetsByGroup,
   weeklyVolume,
@@ -139,7 +142,9 @@ const gappy = [
 ];
 
 check("rollingMean skips unlogged days", rollingMean(gappy, 3), [null, 100, 150, 150, 250]);
-check("ema holds the trend across a gap", ema([{ key: "1", value: 80 }, { key: "2", value: null }, { key: "3", value: 84 }], 0.5), [80, 80, 82]);
+// Two days have passed at 0.5 a day, so the new reading carries 1 - 0.5^2 = 0.75.
+check("ema holds the trend across a gap", ema([{ key: "1", value: 80 }, { key: "2", value: null }, { key: "3", value: 84 }], 0.5), [80, 80, 83]);
+check("ema without gaps is unchanged", ema([{ key: "1", value: 80 }, { key: "2", value: 84 }], 0.5), [80, 82]);
 check("alphaForHalfLife of 7 days", r2(alphaForHalfLife(7) * 100), 9.43);
 
 // --- training ----------------------------------------------------------------
@@ -187,6 +192,21 @@ check(
 check("trainingKpis best streak stops at the empty week", kpis.bestWeekStreak, 2);
 check("trainingKpis rate over three weeks", r2(kpis.perWeek), 1);
 check("trainingKpis ignores an empty range", trainingKpis({}, RANGE).sessions, 0);
+
+// "ghost" stands in for a timed hold: 40 kg for 10 seconds is not 400 kg lifted.
+const ghostIsTimed = timedIn([{ id: "ghost", name: "Hold", group: "Other", timed: true }]);
+check("setVolume skips timed holds", setVolume([set({ exerciseId: "ghost", weight: 40, reps: 60 })], ghostIsTimed), 0);
+check("weeklyVolume skips timed holds", weeklyVolume(DAYS, RANGE, undefined, ghostIsTimed)[0].value, 100 * 5 + 110 + 105 * 5);
+check("a hidden built-in hold still counts as timed", timedIn([])("def-plank"), true);
+check("trainingKpis volume skips timed holds", trainingKpis(DAYS, RANGE, ghostIsTimed).volume, 100 * 5 + 110 + 105 * 5 + 500);
+
+// The range starts on a Wednesday; Monday's session belongs to no part of it.
+const heat = sessionHeatmap(DAYS, { from: "2026-01-07", to: "2026-01-12" });
+check("sessionHeatmap pads the days before the range", heat.cells.slice(0, 3).map((c) => [c.key, c.sets, c.outside]), [
+  ["2026-01-05", 0, true],
+  ["2026-01-06", 0, true],
+  ["2026-01-07", 2, false],
+]);
 
 // --- personal records --------------------------------------------------------
 
@@ -277,8 +297,21 @@ check("nutritionKpis averages", [nk.avgKcal, nk.avgProtein, nk.avgWater], [205, 
 // One trend point is not a trend; the change stays null rather than reading zero.
 check("nutritionKpis needs two trend points", [nk.bwChange, nk.bwPerWeek], [null, null]);
 
-const nk2 = nutritionKpis(FOOD, FOOD_RANGE, [80, null, 79]);
+const FOOD_WEIGHED: FoodDayMap = { ...FOOD, "2026-01-05": { ...FOOD["2026-01-05"], bw: 80 } };
+const nk2 = nutritionKpis(FOOD_WEIGHED, FOOD_RANGE, [80, null, 79]);
 check("nutritionKpis measures change on the trend", [nk2.bwChange, r2(nk2.bwPerWeek ?? 0)], [-1, -1]);
+
+// Twelve weeks on screen, but the weigh-ins span only the last two of them:
+// the rate is per week of weighing, not per week of range.
+const LONG_RANGE = { from: "2026-01-01", to: "2026-03-25" };
+const longKeys = eachDay(LONG_RANGE.from, LONG_RANGE.to);
+const lateWeighIns: FoodDayMap = {
+  [longKeys[69]]: { ...emptyFoodDay(), bw: 82 },
+  [longKeys[83]]: { ...emptyFoodDay(), bw: 81 },
+};
+const lateTrend = longKeys.map((_, i) => (i < 69 ? null : i < 83 ? 82 : 81));
+const nk3 = nutritionKpis(lateWeighIns, LONG_RANGE, lateTrend);
+check("nutritionKpis rate spans the weigh-ins, not the range", [nk3.bwChange, r2(nk3.bwPerWeek ?? 0)], [-1, -0.5]);
 
 check("dataBounds spans both modules", dataBounds(DAYS, FOOD), {
   from: "2026-01-04",

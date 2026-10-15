@@ -68,7 +68,8 @@ export function MaxesModal({ unit, onClose }: Props) {
 
         <div className="day-modal-body">
           <p className="modal-note">
-            Used to show percentage-of-max intensity when logging sets. Stored in {unit}.
+            Used to show percentage-of-max intensity when logging sets. Entered in {unit}, stored
+            in kg.
           </p>
 
           <div className="maxes-fields">
