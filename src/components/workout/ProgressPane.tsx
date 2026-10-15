@@ -97,7 +97,9 @@ export function ProgressPane({ days, library, maxes, unit, onOpenDay }: Props) {
     return best || library.find((e) => !e.timed)?.id || "";
   }, [days, library]);
 
-  const activeLift = library.some((e) => e.id === liftId) ? liftId : defaultLift;
+  // The picker never offers a timed hold, but the saved choice is only a string
+  // in storage; a plank would chart its seconds as reps and invent a 1RM.
+  const activeLift = library.some((e) => e.id === liftId && !e.timed) ? liftId : defaultLift;
   const lift = library.find((e) => e.id === activeLift) ?? null;
   const nameOf = useMemo(() => new Map(library.map((e) => [e.id, e.name])), [library]);
 

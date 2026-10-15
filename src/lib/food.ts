@@ -207,10 +207,13 @@ export function buildFood(draft: FoodDraft, pantry: Food[]): FoodDraftResult {
   const name = draft.name.trim();
   if (name === "") return { ok: false, error: "Give the food a name." };
 
-  const id = slugFood(name);
-  if (pantry.some((f) => f.id === id)) {
+  // Duplicates are judged by name. The id cannot decide it: folding diacritics
+  // gives "fata" and "față" the same slug, and those are different words.
+  if (pantry.some((f) => f.name.trim().toLowerCase() === name.toLowerCase())) {
     return { ok: false, error: "A food with that name already exists." };
   }
+  let id = slugFood(name);
+  while (pantry.some((f) => f.id === id)) id = `${slugFood(name)}-${uid().slice(0, 4)}`;
 
   const kcal = Number(draft.kcal);
   if (draft.kcal.trim() === "" || !Number.isFinite(kcal) || kcal < 0) {

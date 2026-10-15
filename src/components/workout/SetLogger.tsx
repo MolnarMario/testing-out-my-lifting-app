@@ -110,6 +110,19 @@ export function SetLogger({
     setWeight(String(Math.round(fromKg(max, unit) * (pct / 100) * 100) / 100));
   }
 
+  // A new max for the lift already on screen is a change to the request too,
+  // so the weight follows it. Only when the lift itself stayed the same: a lift
+  // change comes from picking (handled there) or from opening a saved set,
+  // which must keep the weight it was lifted at.
+  const lastMax = useRef({ exerciseId, max: relevantMax });
+  useEffect(() => {
+    const prev = lastMax.current;
+    lastMax.current = { exerciseId, max: relevantMax };
+    if (prev.exerciseId === exerciseId && prev.max !== relevantMax) fillFromPercent(exerciseId, intensityValue);
+    // Keyed on the lift and its max; the percentage is read as it stands.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [relevantMax, exerciseId]);
+
   // The weight box holds a number in the displayed unit. When the unit flips,
   // convert what is typed, or saving would read 100 (kg) as 100 lb.
   const shownUnit = useRef(unit);

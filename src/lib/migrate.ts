@@ -454,6 +454,7 @@ export function runMigration(): MigrationReport {
     const u = asUnit(legacyMaxes.unit);
     const conv = (v: unknown) => (finite(v) && v > 0 ? roundKg(toKg(v, u)) : null);
     maxes = { squat: conv(legacyMaxes.squat), bench: conv(legacyMaxes.bench), deadlift: conv(legacyMaxes.deadlift) };
+    report.maxes = true;
   }
 
   const legacyFood = read<LegacyFood>("macroJournal.v1");
@@ -465,16 +466,31 @@ export function runMigration(): MigrationReport {
     report.leftBehind.push(`edits to ${n} built-in ${n === 1 ? "exercise" : "exercises"}`);
   }
 
+  const writes: [string, unknown][] = [];
+  if (customs.length > 0) writes.push(["ironlog.custom", customs]);
+  if (days !== null) writes.push(["ironlog.days", days]);
+  if (maxes !== null) writes.push(["ironlog.maxes", maxes]);
+  if (food !== null) writes.push(["ironlog.food.v1", food]);
+
+  // What each key held before, so a failure part-way through can put it back.
+  // A half-applied import is worse than none: the app's in-memory stores still
+  // hold the old data and would write it over whatever half did land.
+  const before = new Map(writes.map(([key]) => [key, readRaw(key)]));
+
   try {
     backUp();
-    if (customs.length > 0) write("ironlog.custom", customs);
-    if (days !== null) write("ironlog.days", days);
-    if (maxes !== null) write("ironlog.maxes", maxes);
-    if (food !== null) write("ironlog.food.v1", food);
+    for (const [key, value] of writes) write(key, value);
     window.localStorage.setItem(MARKER, new Date().toISOString());
   } catch {
-    // Storage is full or refusing writes. The backup is written first, so the
-    // old data is still recoverable from it even if a later write failed.
+    for (const [key, raw] of before) {
+      try {
+        if (raw === null) window.localStorage.removeItem(key);
+        else window.localStorage.setItem(key, raw);
+      } catch {
+        // Restoring the smaller original rarely fails; if it does, the backup
+        // still holds it.
+      }
+    }
     return { ...emptyReport(), reason: "storage refused the import" };
   }
 

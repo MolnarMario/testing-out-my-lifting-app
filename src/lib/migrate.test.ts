@@ -5,13 +5,12 @@
  */
 
 const store = new Map<string, string>();
-(globalThis as { window?: unknown }).window = {
-  localStorage: {
-    getItem: (k: string) => store.get(k) ?? null,
-    setItem: (k: string, v: string) => void store.set(k, String(v)),
-    removeItem: (k: string) => void store.delete(k),
-  },
+const storage = {
+  getItem: (k: string) => store.get(k) ?? null,
+  setItem: (k: string, v: string) => void store.set(k, String(v)),
+  removeItem: (k: string) => void store.delete(k),
 };
+(globalThis as { window?: unknown }).window = { localStorage: storage };
 
 const { BACKUP, migrationAvailable, runMigration } = await import("./migrate.ts");
 
@@ -92,7 +91,7 @@ check("legacy data offers an import", migrationAvailable(), true);
 
 const report = runMigration();
 check("import ran", report.ran, true);
-check("report counts", [report.days, report.sets, report.skippedSets, report.foodDays, report.foodEntries], [1, 3, 1, 2, 2]);
+check("report counts", [report.days, report.sets, report.skippedSets, report.foodDays, report.foodEntries, report.maxes], [1, 3, 1, 2, 2, true]);
 check("unknown names become custom exercises", report.createdExercises, ["Zercher Squat"]);
 check("what has nowhere to go is named", report.leftBehind, ["1 body-fat reading"]);
 
@@ -128,6 +127,23 @@ check("the overwritten keys are backed up raw", JSON.parse(backup.keys["ironlog.
 check("the old food journal is left alone", store.has("macroJournal.v1"), true);
 
 check("it never runs twice", [migrationAvailable(), runMigration().reason], [false, "already imported"]);
+
+// --- a write that fails part-way is rolled back ------------------------------
+
+store.clear();
+store.set("ironlog.days", JSON.stringify(LEGACY_DAYS));
+store.set("ironlog.maxes", JSON.stringify({ squat: 225, bench: null, deadlift: 500, unit: "lb" }));
+const originalSetItem = storage.setItem;
+// Storage fills up on the maxes write, after the days have already landed.
+storage.setItem = (k, v) => {
+  if (k === "ironlog.maxes" && v.includes("102.06")) throw new Error("QuotaExceededError");
+  originalSetItem(k, v);
+};
+const failed = runMigration();
+storage.setItem = originalSetItem;
+check("a failed import says so", [failed.ran, failed.reason], [false, "storage refused the import"]);
+check("the days it had already written are put back", json("ironlog.days"), LEGACY_DAYS);
+check("and no marker is left behind", store.has("ironlog.migrated.v1"), false);
 
 console.log(fails === 0 ? "\nALL PASS" : `\n${fails} FAILURES`);
 if (fails > 0) throw new Error(`${fails} migrate test failure(s)`);
