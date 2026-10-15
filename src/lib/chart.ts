@@ -132,12 +132,21 @@ export function rollingMean(data: Datum[], window: number): (number | null)[] {
  * Exponentially weighted trend, the shape a bodyweight chart wants: it follows
  * the drift without chasing every water-weight spike. Gaps hold the previous
  * trend value rather than resetting it.
+ *
+ * `data` is one entry per day, so `alpha` is a per-day factor. A reading after
+ * a gap gets the weight the missed days would have given it in total, 1 -
+ * (1 - alpha)^gap: otherwise a weigh-in a month after the last one would move
+ * the trend by a single day's step, and the half-life would stop meaning days.
  */
 export function ema(data: Datum[], alpha = 0.25): (number | null)[] {
   let prev: number | null = null;
+  let gap = 0;
   return data.map((d) => {
+    gap++;
     if (d.value === null) return prev;
-    prev = prev === null ? d.value : alpha * d.value + (1 - alpha) * prev;
+    const weight = 1 - (1 - alpha) ** gap;
+    prev = prev === null ? d.value : weight * d.value + (1 - weight) * prev;
+    gap = 0;
     return prev;
   });
 }

@@ -1,3 +1,5 @@
+import { slugify, uid } from "./format.ts";
+
 export type FoodType = "solid" | "liquid";
 
 /** Entry quantities are stored in grams (solids) or millilitres (liquids). */
@@ -150,6 +152,28 @@ export function totalsFor(entries: FoodEntry[]): Totals {
   );
 }
 
+/**
+ * A day's calories, cans included. Cans are logged as taps rather than food
+ * entries, but their calories are still calories, so every view that totals a
+ * day goes through here rather than through totalsFor alone.
+ */
+export function dayKcal(day: FoodDay): number {
+  return totalsFor(day.entries).kcal + day.cans * CAN_KCAL;
+}
+
+/**
+ * True once a day has food on it. Judged by what was logged, not by the calorie
+ * total: a zero-calorie drink is still something the user wrote down.
+ */
+export function ateSomething(day: FoodDay | undefined): day is FoodDay {
+  return !!day && (day.entries.length > 0 || day.cans > 0);
+}
+
+/** The pantry's own category for a food, with anything unrecognised filed under Other. */
+export function categoryOf(food: Food): FoodCategory {
+  return (FOOD_CATEGORIES as readonly string[]).includes(food.cat) ? (food.cat as FoodCategory) : "Other";
+}
+
 /** One decimal, trailing zero trimmed — 12.0 reads as 12, 12.5 stays 12.5. */
 export function num(value: number): string {
   return Number(value.toFixed(1)).toString();
@@ -209,12 +233,11 @@ export function buildFood(draft: FoodDraft, pantry: Food[]): FoodDraftResult {
   };
 }
 
+/**
+ * A name with no letters or digits at all ("???") would slug to a bare "cf-",
+ * and every such food would then share one id; those get a random suffix.
+ */
 export function slugFood(name: string): string {
-  return (
-    "cf-" +
-    name
-      .toLowerCase()
-      .replace(/[^a-z0-9]+/g, "-")
-      .replace(/^-|-$/g, "")
-  );
+  const slug = slugify(name);
+  return "cf-" + (slug === "" ? uid() : slug);
 }

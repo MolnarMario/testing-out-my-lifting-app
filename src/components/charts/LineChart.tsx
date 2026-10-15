@@ -118,8 +118,12 @@ export function LineChart({
   /** Structural on purpose — the same reader serves pointermove and click. */
   function pointerIndex(e: Pick<ReactPointerEvent<SVGRectElement>, "clientX" | "currentTarget">): number | null {
     if (labels.length === 0 || plotW <= 0) return null;
+    if (labels.length === 1) return 0;
+    // Points sit inside the padded plot, not across the whole SVG, so the
+    // pointer is mapped into plot space before picking the nearest one.
     const box = e.currentTarget.getBoundingClientRect();
-    const pos = (e.clientX - box.left) / box.width;
+    const px = ((e.clientX - box.left) / box.width) * width - PAD.left;
+    const pos = px / plotW;
     return Math.min(labels.length - 1, Math.max(0, Math.round(pos * (labels.length - 1))));
   }
 

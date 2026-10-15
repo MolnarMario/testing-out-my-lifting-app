@@ -63,9 +63,18 @@ function write(key: string, raw: string) {
   }
 }
 
+/**
+ * Turns whatever JSON is stored under a key into a value of the right shape.
+ * Saved data is trusted about as far as a text file: an older build, a hand
+ * edit or a stray `null` must not reach a component, or a setter's `prev`.
+ */
+export type Normalize<T> = (raw: unknown) => T;
+
 interface Store {
   value: unknown;
   listeners: Set<() => void>;
+  /** Kept so a change from another tab can be parsed the same way. */
+  parse: (raw: string | null) => unknown;
 }
 
 /**
@@ -75,25 +84,46 @@ interface Store {
  */
 const stores = new Map<string, Store>();
 
-function getStore<T>(key: string, initial: T): Store {
+function getStore<T>(key: string, initial: T, normalize?: Normalize<T>): Store {
   const existing = stores.get(key);
   if (existing) return existing;
 
-  let value: T;
-  try {
-    const raw = read(key);
-    value = raw !== null ? (JSON.parse(raw) as T) : initial;
-  } catch {
-    value = initial;
-  }
+  const parse = (raw: string | null): T => {
+    if (raw === null) return initial;
+    try {
+      const value: unknown = JSON.parse(raw);
+      return normalize ? normalize(value) : (value as T);
+    } catch {
+      return initial;
+    }
+  };
 
-  const store: Store = { value, listeners: new Set() };
+  const store: Store = { value: parse(read(key)), listeners: new Set(), parse };
   stores.set(key, store);
   return store;
 }
 
-export function useLocalStorage<T>(key: string, initial: T) {
-  const store = getStore(key, initial);
+/**
+ * Another tab wrote to storage. Without this, a second open tab keeps its old
+ * copy and its next write puts that copy back, erasing whatever the first tab
+ * logged in between. A null key means the other tab cleared everything.
+ */
+window.addEventListener("storage", (event) => {
+  if (event.storageArea !== null && event.storageArea !== window.localStorage) return;
+
+  const targets = event.key === null ? [...stores.entries()] : [[event.key, stores.get(event.key)] as const];
+  for (const [key, store] of targets) {
+    if (!store) continue;
+    const raw = event.key === null ? read(key) : event.newValue;
+    if (raw === null) memory.delete(key);
+    else memory.set(key, raw);
+    store.value = store.parse(raw);
+    store.listeners.forEach((fn) => fn());
+  }
+});
+
+export function useLocalStorage<T>(key: string, initial: T, normalize?: Normalize<T>) {
+  const store = getStore(key, initial, normalize);
 
   const value = useSyncExternalStore(
     useCallback(

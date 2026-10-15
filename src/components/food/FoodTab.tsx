@@ -32,8 +32,9 @@ export function FoodTab({ unit }: Props) {
   // Per-kg targets need a weight; the most recent one on or before today is the
   // best guess, since bodyweight is not logged every day.
   const latestBodyweight = useMemo(() => {
+    const today = todayKey();
     const dated = Object.entries(state.days)
-      .filter(([, d]) => d.bw !== null)
+      .filter(([key, d]) => d.bw !== null && key <= today)
       .sort(([a], [b]) => b.localeCompare(a));
     return dated.length > 0 ? dated[0][1].bw : null;
   }, [state.days]);
@@ -75,6 +76,7 @@ export function FoodTab({ unit }: Props) {
       {scanOpen && (
         <ScanModal
           pantry={pantry}
+          date={date}
           onClose={() => setScanOpen(false)}
           onSave={(food, log) => {
             addFood(food);

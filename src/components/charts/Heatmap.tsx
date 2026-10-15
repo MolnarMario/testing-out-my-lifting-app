@@ -64,7 +64,7 @@ export function Heatmap({ cells, weeks, onPick }: Props) {
                   {monthLabels[i]}
                 </span>
                 {column.map((cell, row) => {
-                  if (!cell) return <span className="heat-cell" key={row} style={{ opacity: 0 }} />;
+                  if (!cell || cell.outside) return <span className="heat-cell" key={row} style={{ opacity: 0 }} />;
                   const lit = cell.sets > 0;
                   const classes = [
                     "heat-cell",

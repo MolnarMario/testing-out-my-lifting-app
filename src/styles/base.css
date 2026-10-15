@@ -1809,9 +1809,11 @@ button.mc-datefield{font:inherit;color:inherit;}
 
 .scan-modal{width:min(540px,100%);}
 
-.scan-drop{display:flex;flex-direction:column;align-items:center;gap:6px;padding:34px 18px;border:1px dashed var(--border-strong);border-radius:14px;background:var(--surface-2);cursor:pointer;transition:.15s;text-align:center;}
+.scan-drop{position:relative;display:flex;flex-direction:column;align-items:center;gap:6px;padding:34px 18px;border:1px dashed var(--border-strong);border-radius:14px;background:var(--surface-2);cursor:pointer;transition:.15s;text-align:center;}
 .scan-drop:hover{border-color:var(--accent-line);background:var(--surface-3);}
-.scan-drop input{display:none;}
+/* Hidden but still focusable, so the picker opens from the keyboard too. */
+.scan-drop input{position:absolute;width:1px;height:1px;opacity:0;overflow:hidden;clip:rect(0 0 0 0);}
+.scan-drop:focus-within{outline:2px solid var(--accent);outline-offset:2px;}
 .scan-drop svg{width:30px;height:30px;color:var(--muted);}
 .scan-drop .t{font-family:var(--font-display);text-transform:uppercase;letter-spacing:.1em;font-size:13px;color:var(--text-2);}
 .scan-drop .d{font-size:12px;color:var(--muted-2);}

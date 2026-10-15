@@ -1,5 +1,6 @@
 import { Dumbbell, Layers, Pencil, Trash2 } from "lucide-react";
 import { formatWeight, fromKg } from "../../lib/format";
+import { setVolume, timedIn } from "../../lib/stats";
 import type { Exercise, SetEntry, Unit } from "../../lib/types";
 
 interface Props {
@@ -61,7 +62,7 @@ export function LogTable({
   });
 
   const totalReps = sets.reduce((sum, s) => sum + s.reps, 0);
-  const volumeKg = sets.reduce((sum, s) => sum + s.weight * s.reps, 0);
+  const volumeKg = setVolume(sets, timedIn(library));
   const heaviestKg = sets.reduce((best, s) => Math.max(best, s.weight), 0);
 
   return (

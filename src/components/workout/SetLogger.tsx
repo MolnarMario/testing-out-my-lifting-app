@@ -1,9 +1,9 @@
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { Check, ChevronDown, Pencil, Plus } from "lucide-react";
 import { NumberField } from "../NumberField";
 import { ExercisePicker } from "./ExercisePicker";
 import { KNEE_GEAR } from "../../data/exercises";
-import { fromKg, toKg, roundKg, uid, formatWeight } from "../../lib/format";
+import { convert, decimalInput, fromKg, toKg, roundKg, uid, formatWeight } from "../../lib/format";
 import type { Exercise, IntensityType, SetEntry, Stance, Unit } from "../../lib/types";
 import type { Maxes } from "../../hooks/useMaxes";
 
@@ -77,7 +77,8 @@ export function SetLogger({
   const countNum = Number(setCount);
   const intensityNum = Number(intensityValue);
 
-  const weightOk = weight.trim() !== "" && !Number.isNaN(weightNum) && weightNum > 0;
+  // Zero is a real weight: a plank, a pull-up or a dip at bodyweight.
+  const weightOk = weight.trim() !== "" && Number.isFinite(weightNum) && weightNum >= 0;
   const repsOk = reps.trim() !== "" && Number.isInteger(repsNum) && repsNum >= 1;
   const countOk = isEditing || (Number.isInteger(countNum) && countNum >= 1 && countNum <= 20);
   const intensityOk =
@@ -95,13 +96,32 @@ export function SetLogger({
       ? fromKg(relevantMax, unit) * (intensityNum / 100)
       : null;
 
-  // Asking for a percentage of a known max is asking for that weight, so fill it
-  // in. Typing over the weight afterwards still wins — this only drives the
-  // field while the percentage is the thing being changed.
+  /**
+   * Asking for a percentage of a known max is asking for that weight, so fill
+   * it in. Driven from the two actions that change the request (typing the
+   * percentage, picking the lift) rather than from an effect: an effect also
+   * fires when a saved set is opened for editing, and would overwrite the
+   * weight actually lifted with today's percentage of today's max.
+   */
+  function fillFromPercent(liftId: string | null, pctText: string) {
+    const max = liftId === null ? null : maxForExercise(liftId, maxes);
+    const pct = Number(pctText);
+    if (intensityType !== "pct" || max === null || pctText.trim() === "" || !(pct > 0) || pct > 200) return;
+    setWeight(String(Math.round(fromKg(max, unit) * (pct / 100) * 100) / 100));
+  }
+
+  // The weight box holds a number in the displayed unit. When the unit flips,
+  // convert what is typed, or saving would read 100 (kg) as 100 lb.
+  const shownUnit = useRef(unit);
   useEffect(() => {
-    if (impliedWeight === null) return;
-    setWeight(String(Math.round(impliedWeight * 100) / 100));
-  }, [impliedWeight]);
+    if (shownUnit.current === unit) return;
+    const from = shownUnit.current;
+    shownUnit.current = unit;
+    setWeight((w) => {
+      const n = Number(w);
+      return w.trim() === "" || !Number.isFinite(n) ? w : String(Math.round(convert(n, from, unit) * 100) / 100);
+    });
+  }, [unit]);
 
   function reset() {
     setWeight("");
@@ -298,8 +318,10 @@ export function SetLogger({
                 value={intensityValue}
                 aria-label="Percentage of one-rep max"
                 onChange={(e) => {
-                  const next = e.target.value;
-                  if (next === "" || /^\d*\.?\d*$/.test(next)) setIntensityValue(next);
+                  const next = decimalInput(e.target.value);
+                  if (next === null) return;
+                  setIntensityValue(next);
+                  fillFromPercent(exerciseId, next);
                 }}
               />
               <span className="sfx">%</span>
@@ -344,6 +366,7 @@ export function SetLogger({
             selectedId={exerciseId}
             onPick={(ex) => {
               setExerciseId(ex.id);
+              fillFromPercent(ex.id, intensityValue);
               setPickerOpen(false);
             }}
             onClose={() => setPickerOpen(false)}
@@ -378,6 +401,7 @@ export function SetLogger({
           selectedId={exerciseId}
           onPick={(ex) => {
             setExerciseId(ex.id);
+            fillFromPercent(ex.id, intensityValue);
             setPickerOpen(false);
           }}
           onClose={() => setPickerOpen(false)}

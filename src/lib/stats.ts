@@ -8,11 +8,10 @@
  */
 
 import { estimate1RM } from "./format.ts";
-import { totalsFor } from "./food.ts";
+import { ateSomething, dayKcal, totalsFor } from "./food.ts";
 import type { FoodDay, FoodGoals } from "./food.ts";
 import type { DayLog, Exercise, SetEntry } from "./types.ts";
 import { READINESS_KEYS } from "./types.ts";
-import { CAN_KCAL } from "./food.ts";
 import { eachDay, eachWeek, weekStart } from "./chart.ts";
 import type { Datum } from "./chart.ts";
 
@@ -44,9 +43,22 @@ function sessionMinutes(day: DayLog): number | null {
   return end >= start ? end - start : end + 24 * 60 - start;
 }
 
-/** Volume in kg for a list of sets. Bodyweight work at 0 kg contributes 0. */
-export function setVolume(sets: SetEntry[]): number {
-  return sum(sets.map((s) => s.weight * s.reps));
+/** Whether a set is a timed hold, whose `reps` are seconds rather than reps. */
+export type IsTimed = (exerciseId: string) => boolean;
+
+/** Builds an IsTimed from the library, for the callers that have one. */
+export function timedIn(library: Exercise[]): IsTimed {
+  const timed = new Set(library.filter((e) => e.timed).map((e) => e.id));
+  return (id) => timed.has(id);
+}
+
+/**
+ * Volume in kg for a list of sets. Bodyweight work at 0 kg contributes 0, and
+ * timed holds contribute nothing: 20 kg held for 60 seconds is not 1,200 kg
+ * of lifting.
+ */
+export function setVolume(sets: SetEntry[], isTimed?: IsTimed): number {
+  return sum(sets.map((s) => (isTimed?.(s.exerciseId) ? 0 : s.weight * s.reps)));
 }
 
 /**
@@ -122,6 +134,7 @@ export function weeklyVolume(
   days: DayMap,
   range: Range,
   filter?: (set: SetEntry) => boolean,
+  isTimed?: IsTimed,
 ): WeekBucket<number>[] {
   const totals = new Map<string, number>();
   for (const week of eachWeek(range.from, range.to)) totals.set(week, 0);
@@ -132,7 +145,7 @@ export function weeklyVolume(
     const week = weekStart(key);
     if (!totals.has(week)) continue;
     const matching = filter ? sets.filter(filter) : sets;
-    totals.set(week, (totals.get(week) ?? 0) + setVolume(matching));
+    totals.set(week, (totals.get(week) ?? 0) + setVolume(matching, isTimed));
   }
 
   return [...totals].map(([week, value]) => ({ week, value }));
@@ -254,6 +267,12 @@ export interface HeatCell {
   /** Position in the grid — column is the week, row is Mon..Sun. */
   week: number;
   weekday: number;
+  /**
+   * Before the range starts. The first column still begins on Monday, so a
+   * range starting mid-week leaves cells that belong to no part of it; they
+   * draw as padding rather than showing training the range excludes.
+   */
+  outside: boolean;
 }
 
 /** A GitHub-style grid of training days: one column per week, Mon at the top. */
@@ -266,11 +285,13 @@ export function sessionHeatmap(days: DayMap, range: Range): { cells: HeatCell[];
     const week = index.get(weekStart(key));
     if (week === undefined) continue;
     const [y, m, d] = key.split("-").map(Number);
+    const outside = key < range.from;
     cells.push({
       key,
-      sets: days[key]?.sets.length ?? 0,
+      sets: outside ? 0 : (days[key]?.sets.length ?? 0),
       week,
       weekday: (new Date(y, m - 1, d).getDay() + 6) % 7,
+      outside,
     });
   }
 
@@ -294,7 +315,7 @@ export interface TrainingKpis {
   bestWeekStreak: number;
 }
 
-export function trainingKpis(days: DayMap, range: Range): TrainingKpis {
+export function trainingKpis(days: DayMap, range: Range, isTimed?: IsTimed): TrainingKpis {
   let sessions = 0;
   let sets = 0;
   let volume = 0;
@@ -307,7 +328,7 @@ export function trainingKpis(days: DayMap, range: Range): TrainingKpis {
     if (!day || day.sets.length === 0) continue;
     sessions++;
     sets += day.sets.length;
-    volume += setVolume(day.sets);
+    volume += setVolume(day.sets, isTimed);
 
     const mins = sessionMinutes(day);
     if (mins !== null && mins > 0) minutes.push(mins);
@@ -347,16 +368,6 @@ export function trainingKpis(days: DayMap, range: Range): TrainingKpis {
 }
 
 // --- nutrition ---------------------------------------------------------------
-
-/** Cans are logged as taps, but their calories are still calories. */
-function dayKcal(day: FoodDay): number {
-  return totalsFor(day.entries).kcal + day.cans * CAN_KCAL;
-}
-
-/** True once a day has anything worth charting on the calorie axis. */
-function ateSomething(day: FoodDay | undefined): day is FoodDay {
-  return !!day && (day.entries.length > 0 || day.cans > 0);
-}
 
 /**
  * Daily calories across the range. Days with nothing logged come back as null
@@ -511,11 +522,17 @@ export function nutritionKpis(
   const waters = keys.map((k) => foodDays[k]?.water ?? 0).filter((w) => w > 0);
   const weighIns = keys.map((k) => foodDays[k]?.bw).filter((b): b is number => b != null);
 
-  const trendPoints = trend.filter((v): v is number => v !== null);
-  const first = trendPoints[0] ?? null;
-  const last = trendPoints[trendPoints.length - 1] ?? null;
-  const change = first !== null && last !== null && trendPoints.length > 1 ? last - first : null;
-  const weeks = Math.max(1, keys.length / 7);
+  // Measured between the first and last real weigh-ins, not across the whole
+  // range: the trend is empty before the first and only held flat after the
+  // last, so dividing by the range would spread two weeks of change over six
+  // months and report a fraction of the real rate.
+  const weighedAt = keys.flatMap((k, i) => (foodDays[k]?.bw != null ? [i] : []));
+  const firstAt = weighedAt[0];
+  const lastAt = weighedAt[weighedAt.length - 1];
+  const first = firstAt === undefined ? null : (trend[firstAt] ?? null);
+  const last = lastAt === undefined ? null : (trend[lastAt] ?? null);
+  const change = first !== null && last !== null && lastAt > firstAt ? last - first : null;
+  const weeks = lastAt === undefined ? 1 : Math.max(1, (lastAt - firstAt) / 7);
 
   const mean = (ns: number[]) => (ns.length === 0 ? null : sum(ns) / ns.length);
 

@@ -5,6 +5,7 @@ import {
   CAN_ML,
   FOOD_CATEGORIES,
   baseUnitFor,
+  categoryOf,
   fromBaseQty,
   num,
   toBaseQty,
@@ -13,7 +14,7 @@ import {
   unitLabel,
 } from "../../lib/food";
 import type { Food, FoodDay, FoodGoals, QtyUnit } from "../../lib/food";
-import { addDays, formatDateLong, fromKg, roundKg, toKg, uid } from "../../lib/format";
+import { addDays, decimalInput, formatDateLong, fromKg, roundKg, toKg, uid } from "../../lib/format";
 import type { Unit } from "../../lib/types";
 
 interface Props {
@@ -63,6 +64,8 @@ export function TodayPane({
   const kcalGoal = goals.kcal ?? 0;
   const overKcal = kcalGoal > 0 && totals.kcal > kcalGoal;
   const waterGoal = goals.water ?? 0;
+
+  const shownBw = day.bw === null ? "" : num(fromKg(day.bw, unit));
 
   const qtyNum = Number(qty);
   const qtyValid = qty.trim() !== "" && Number.isFinite(qtyNum) && qtyNum > 0;
@@ -294,7 +297,7 @@ export function TodayPane({
           <div className="mc-tsub">
             {day.cans > 0 ? (
               <>
-                <b>{day.cans * CAN_ML} ml</b> counted toward water
+                <b>{day.cans * CAN_ML} ml</b> today, not counted as water
               </>
             ) : (
               `${CAN_ML} ml a can`
@@ -329,18 +332,24 @@ export function TodayPane({
           </div>
 
           <div className="mc-bw-in">
+            {/* Keyed by unit and value as well as date: a field still showing
+                "80" after a switch to lb would save 80 lb on the next blur, and
+                one that missed a change from another tab would save the old value. */}
             <input
-              key={date}
+              key={`${date}|${unit}|${shownBw}`}
               type="text"
               inputMode="decimal"
               autoComplete="off"
               placeholder="—"
               aria-label={`Bodyweight in ${unit}`}
-              defaultValue={day.bw === null ? "" : num(fromKg(day.bw, unit))}
+              defaultValue={shownBw}
               onKeyDown={(e) => {
                 if (e.key === "Enter") e.currentTarget.blur();
               }}
               onBlur={(e) => {
+                // Untouched, it stays as stored: the shown value is rounded to one
+                // decimal, so saving it back would walk the weight a little each time.
+                if (e.target.value.trim() === shownBw) return;
                 const parsed = parseFloat(e.target.value.replace(",", "."));
                 const next =
                   Number.isFinite(parsed) && parsed > 0 ? roundKg(toKg(parsed, unit)) : null;
@@ -471,7 +480,7 @@ export function TodayPane({
               {pantry.length === 0 ? "No foods yet — add in Pantry" : "Pick a food…"}
             </option>
             {FOOD_CATEGORIES.map((cat) => {
-              const items = pantry.filter((f) => f.cat === cat);
+              const items = pantry.filter((f) => categoryOf(f) === cat);
               if (items.length === 0) return null;
               return (
                 <optgroup label={cat} key={cat}>
@@ -495,8 +504,8 @@ export function TodayPane({
             value={qty}
             disabled={pantry.length === 0}
             onChange={(e) => {
-              const next = e.target.value;
-              if (next === "" || /^\d*\.?\d*$/.test(next)) setQty(next);
+              const next = decimalInput(e.target.value);
+              if (next !== null) setQty(next);
             }}
             onKeyDown={(e) => {
               if (e.key === "Enter") {

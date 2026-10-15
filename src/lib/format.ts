@@ -99,10 +99,38 @@ export function formatDateShort(key: string): string {
 }
 
 export function formatDuration(min: number): string {
-  const h = Math.floor(min / 60);
-  const m = Math.round(min % 60);
+  // Round the total first: rounding the remainder alone turns 119.6 into "1h 60m".
+  const total = Math.round(min);
+  const h = Math.floor(total / 60);
+  const m = total % 60;
   if (h > 0) return `${h}h ${m}m`;
   return `${m}m`;
+}
+
+/**
+ * Screens a keystroke in a numeric text field. Returns the text to keep, with a
+ * decimal comma turned into a point, or null to reject the keystroke.
+ *
+ * A phone set to a comma-decimal locale (Romanian, most of Europe) puts "," on
+ * the decimal keypad, so refusing it leaves no way to type 12.5.
+ */
+export function decimalInput(raw: string): string | null {
+  const text = raw.replace(",", ".");
+  return text === "" || /^\d*\.?\d*$/.test(text) ? text : null;
+}
+
+/**
+ * The id part of a name: lowercase ASCII words joined by hyphens. Diacritics
+ * fold to their base letter first, so "Fandări" becomes "fandari" rather than
+ * losing the "ă" and splitting the word in two.
+ */
+export function slugify(name: string): string {
+  return name
+    .normalize("NFD")
+    .replace(/[̀-ͯ]/g, "")
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, "-")
+    .replace(/^-|-$/g, "");
 }
 
 export function uid(): string {
