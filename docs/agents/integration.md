@@ -28,7 +28,9 @@ codex review --base origin/main -c model=gpt-6-luna -c model_reasoning_effort=hi
    that is where `tsc` runs.
 4. Don't commit the rebuilt `docs/index.html` or `docs/assets/`. Bundle names
    are content hashes, so two lanes that each commit a build always conflict.
-   Throw the build away with `git restore docs/ && git clean -fd docs/assets`.
+   Throw the build away with
+   `git restore docs/index.html docs/assets && git clean -fd docs/assets`.
+   Leave the rest of `docs/` alone, since `docs/agents/` is hand-written.
    The integrator publishes one build per PR.
 5. Run the Luna review. Commit a fix for every finding that holds up and run
    it again, until Luna finds nothing you accept as a real problem. A finding
