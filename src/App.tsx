@@ -127,7 +127,11 @@ export default function App() {
               </>
             )}
             {imported.leftBehind.length > 0 && (
-              <> The new version has no place for {imported.leftBehind.join(" or ")}; those stay in the backup.</>
+              <>
+                {" "}
+                The new version has no place for {imported.leftBehind.join(" or ")}; the old data
+                that holds them stays on this device.
+              </>
             )}
           </span>
           <button

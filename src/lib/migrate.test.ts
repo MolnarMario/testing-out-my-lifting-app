@@ -100,7 +100,11 @@ const report = runMigration();
 check("import ran", report.ran, true);
 check("report counts", [report.days, report.sets, report.skippedSets, report.foodDays, report.foodEntries, report.maxes], [1, 3, 1, 2, 2, true]);
 check("unknown names become custom exercises", report.createdExercises, ["Zercher Squat"]);
-check("what has nowhere to go is named", report.leftBehind, ["1 body-fat reading"]);
+check("what has nowhere to go is named", report.leftBehind, [
+  "1 body-fat reading",
+  // Two cans came across, and the old default counted 2 g of carbs each.
+  "the old can settings (10 kcal and 2 g carbs a can; cans now count 10 kcal and no carbs)",
+]);
 
 const days = json("ironlog.days");
 const sets = days["2025-06-01"].sets;

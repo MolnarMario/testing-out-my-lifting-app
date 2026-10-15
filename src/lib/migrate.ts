@@ -364,10 +364,18 @@ function migrateFood(legacy: LegacyFood, report: MigrationReport): FoodState {
   if (bodyFat > 0) {
     report.leftBehind.push(`${bodyFat} body-fat ${bodyFat === 1 ? "reading" : "readings"}`);
   }
+  // The old build counted a can as monKcal (default 10) and monCarbs (default
+  // 2 g); the new one counts 10 kcal and no carbs. Only matters if cans came
+  // across, and then even the defaults lose 2 g of carbs a can.
+  const cansImported = Object.values(days).reduce((sum, d) => sum + d.cans, 0);
   const monKcal = legacy.extra?.monKcal;
   const monCarbs = legacy.extra?.monCarbs;
-  if ((finite(monKcal) && monKcal > 0 && monKcal !== 10) || finite(monCarbs)) {
-    report.leftBehind.push("your custom calories and carbs per can");
+  const kcalPerCan = finite(monKcal) && monKcal > 0 ? monKcal : 10;
+  const carbsPerCan = finite(monCarbs) && monCarbs >= 0 ? monCarbs : 2;
+  if (cansImported > 0 && (carbsPerCan > 0 || kcalPerCan !== 10)) {
+    report.leftBehind.push(
+      `the old can settings (${kcalPerCan} kcal and ${carbsPerCan} g carbs a can; cans now count 10 kcal and no carbs)`,
+    );
   }
 
   return { foods, days, goal, removedFoods };
