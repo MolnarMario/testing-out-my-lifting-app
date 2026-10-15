@@ -61,8 +61,10 @@ export function LogTable({
     return { set, n };
   });
 
-  const totalReps = sets.reduce((sum, s) => sum + s.reps, 0);
-  const volumeKg = setVolume(sets, timedIn(library));
+  // A timed hold's `reps` are seconds, so it counts toward neither total.
+  const isTimed = timedIn(library);
+  const totalReps = sets.reduce((sum, s) => sum + (isTimed(s.exerciseId) ? 0 : s.reps), 0);
+  const volumeKg = setVolume(sets, isTimed);
   const heaviestKg = sets.reduce((best, s) => Math.max(best, s.weight), 0);
 
   return (
