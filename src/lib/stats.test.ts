@@ -197,6 +197,7 @@ check("trainingKpis ignores an empty range", trainingKpis({}, RANGE).sessions, 0
 const ghostIsTimed = timedIn([{ id: "ghost", name: "Hold", group: "Other", timed: true }]);
 check("setVolume skips timed holds", setVolume([set({ exerciseId: "ghost", weight: 40, reps: 60 })], ghostIsTimed), 0);
 check("weeklyVolume skips timed holds", weeklyVolume(DAYS, RANGE, undefined, ghostIsTimed)[0].value, 100 * 5 + 110 + 105 * 5);
+check("a hidden built-in hold still counts as timed", timedIn([])("def-plank"), true);
 check("trainingKpis volume skips timed holds", trainingKpis(DAYS, RANGE, ghostIsTimed).volume, 100 * 5 + 110 + 105 * 5 + 500);
 
 // The range starts on a Wednesday; Monday's session belongs to no part of it.

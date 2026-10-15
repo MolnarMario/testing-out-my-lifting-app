@@ -7,6 +7,7 @@
  * never walk a stored value.
  */
 
+import { DEFAULT_EXERCISES } from "../data/exercises.ts";
 import { estimate1RM } from "./format.ts";
 import { ateSomething, dayKcal, totalsFor } from "./food.ts";
 import type { FoodDay, FoodGoals } from "./food.ts";
@@ -46,9 +47,13 @@ function sessionMinutes(day: DayLog): number | null {
 /** Whether a set is a timed hold, whose `reps` are seconds rather than reps. */
 export type IsTimed = (exerciseId: string) => boolean;
 
-/** Builds an IsTimed from the library, for the callers that have one. */
+/**
+ * Builds an IsTimed from the library, for the callers that have one. Built-ins
+ * are always included: hiding the plank takes it out of the library, but its
+ * old sets are still holds, and their seconds must not turn back into reps.
+ */
 export function timedIn(library: Exercise[]): IsTimed {
-  const timed = new Set(library.filter((e) => e.timed).map((e) => e.id));
+  const timed = new Set([...DEFAULT_EXERCISES, ...library].filter((e) => e.timed).map((e) => e.id));
   return (id) => timed.has(id);
 }
 
