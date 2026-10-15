@@ -1,7 +1,9 @@
 import { rmSync } from "node:fs";
-import { fileURLToPath } from "node:url";
+import { resolve } from "node:path";
 import { defineConfig } from "vite";
 import react from "@vitejs/plugin-react";
+
+let assetsDir = "";
 
 export default defineConfig({
   plugins: [
@@ -12,11 +14,11 @@ export default defineConfig({
       // previous build's assets behind.
       name: "clear-old-assets",
       apply: "build",
+      configResolved(config) {
+        assetsDir = resolve(config.root, config.build.outDir, config.build.assetsDir);
+      },
       buildStart() {
-        rmSync(fileURLToPath(new URL("./docs/assets", import.meta.url)), {
-          recursive: true,
-          force: true,
-        });
+        rmSync(assetsDir, { recursive: true, force: true });
       },
     },
   ],
