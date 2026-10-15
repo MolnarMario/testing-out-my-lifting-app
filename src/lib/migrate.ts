@@ -379,7 +379,11 @@ export function migrationAvailable(): boolean {
   if (hasLegacyDays(read<unknown>("ironlog.days"))) return true;
   if (readRaw("macroJournal.v1") !== null && readRaw("ironlog.food.v1") === null) return true;
   const maxes = read<LegacyMaxes>("ironlog.maxes");
-  return isObject(maxes) && typeof maxes.unit === "string";
+  if (isObject(maxes) && typeof maxes.unit === "string") return true;
+  // Edits to built-in exercises are all some old installs have. The import
+  // cannot carry them, but it is how the user finds out they stayed behind.
+  const overrides = read<unknown>("ironlog.overrides");
+  return isObject(overrides) && Object.keys(overrides).length > 0;
 }
 
 /** Copies the keys about to be overwritten, once. A later import never replaces the first backup. */

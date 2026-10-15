@@ -34,6 +34,13 @@ store.set("ironlog.days", JSON.stringify({ "2026-10-01": { sets: [], readinessOn
 check("new-format days alone offer no import", migrationAvailable(), false);
 store.clear();
 
+// Exercise edits alone still get the banner, so the summary can say they stayed behind.
+store.set("ironlog.overrides", JSON.stringify({ "def-squat": { belt: false } }));
+check("exercise edits alone offer an import", migrationAvailable(), true);
+const editsOnly = runMigration();
+check("and the summary names them", [editsOnly.ran, editsOnly.leftBehind], [true, ["edits to 1 built-in exercise"]]);
+store.clear();
+
 // --- the original build's storage ----------------------------------------------
 
 const NEW_DAY = {
